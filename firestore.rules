@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function currentUserData() {
+      return currentUser().data;
+    }
+
+    function isActiveUser() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && currentUserData().active == true;
+    }
+
+    function isOwner() {
+      return isActiveUser()
+        && (currentUserData().role == "owner" || currentUserData().role == "admin");
+    }
+
+    function isSelf(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function ownsClient(resourceData) {
+      return resourceData.createdByUserId == request.auth.uid
+        || resourceData.specialistId == request.auth.uid;
+    }
+
+    function canReadClient(resourceData) {
+      return isOwner() || ownsClient(resourceData);
+    }
+
+    function writesOwnRecord() {
+      return request.resource.data.createdByUserId == request.auth.uid;
+    }
+
+    match /users/{userId} {
+      allow read: if isActiveUser() && (isOwner() || isSelf(userId));
+      allow create: if signedIn()
+        && (
+          !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          || isOwner()
+        );
+      allow update: if isOwner() || (isSelf(userId) && request.resource.data.diff(resource.data).changedKeys().hasOnly(["updatedAt", "mustChangePassword"]));
+      allow delete: if false;
+    }
+
+    match /clients/{clientId} {
+      allow read: if isActiveUser() && canReadClient(resource.data);
+      allow create: if isActiveUser() && writesOwnRecord();
+      allow update: if isActiveUser()
+        && canReadClient(resource.data)
+        && (
+          isOwner()
+          || (
+            ownsClient(resource.data)
+            && request.resource.data.createdByUserId == resource.data.createdByUserId
+            && request.resource.data.specialistId == resource.data.specialistId
+          )
+        );
+      allow delete: if isOwner();
+
+      match /sessions/{sessionId} {
+        allow read: if isActiveUser() && canReadClient(get(/databases/$(database)/documents/clients/$(clientId)).data);
+        allow create: if isActiveUser()
+          && canReadClient(get(/databases/$(database)/documents/clients/$(clientId)).data)
+          && writesOwnRecord();
+        allow update: if isOwner();
+        allow delete: if isOwner();
+      }
+
+      match /consent/{consentId} {
+        allow read: if isActiveUser() && canReadClient(get(/databases/$(database)/documents/clients/$(clientId)).data);
+        allow create: if isActiveUser()
+          && canReadClient(get(/databases/$(database)/documents/clients/$(clientId)).data)
+          && writesOwnRecord();
+        allow update, delete: if false;
+      }
+    }
+  }
+}
