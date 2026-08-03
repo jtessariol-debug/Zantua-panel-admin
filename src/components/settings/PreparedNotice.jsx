@@ -1,6 +1,6 @@
 import { BRANDING } from "../../lib/branding";
 
-export default function PreparedNotice({ message = "Configuración preparada. Requiere activar guardado persistente." }) {
+export default function PreparedNotice({ message = "El guardado persistente de esta sección no está disponible en este momento." }) {
   return (
     <div style={styles.notice}>
       {message}

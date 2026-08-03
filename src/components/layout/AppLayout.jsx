@@ -25,7 +25,7 @@ export default function AppLayout({ children }) {
   return (
     <div style={styles.page}>
       <Sidebar
-        userName={profile?.name || user?.email || "Usuario"}
+        userName={profile?.name || profile?.full_name || user?.email || "Usuario"}
         roleLabel={getRoleLabel(profile?.role)}
         role={profile?.role}
         onLogout={logout}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ActionButton from "../ui/ActionButton";
 import SectionCard from "../ui/SectionCard";
 import { BRANDING } from "../../lib/branding";
 import PreparedNotice from "./PreparedNotice";
@@ -29,9 +30,9 @@ export default function RulesSettings({
       <form onSubmit={handleSubmit} style={styles.form}>
         {renderFields(form, setForm)}
         <div style={styles.actions}>
-          <button type="submit" style={styles.primaryButton} disabled={saving}>
+          <ActionButton type="submit" disabled={saving}>
             {saving ? "Guardando..." : "Guardar configuración"}
-          </button>
+          </ActionButton>
         </div>
       </form>
     </SectionCard>
@@ -69,50 +70,9 @@ export function SettingsCheckbox({ checked, onChange, label }) {
 }
 
 const styles = {
-  form: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 16,
-  },
-  fieldLabel: {
-    color: BRANDING.colors.textMuted,
-    fontSize: 12,
-    textTransform: "uppercase",
-    fontWeight: 700,
-    marginBottom: 6,
-  },
-  input: {
-    width: "100%",
-    boxSizing: "border-box",
-    background: "#FCFAF7",
-    border: `1px solid ${BRANDING.colors.border}`,
-    borderRadius: 14,
-    padding: "14px 15px",
-    color: BRANDING.colors.text,
-    fontSize: 14,
-    outline: "none",
-  },
-  toggleRow: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    color: BRANDING.colors.textMuted,
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  actions: {
-    gridColumn: "1 / -1",
-    display: "flex",
-    justifyContent: "flex-end",
-  },
-  primaryButton: {
-    background: `linear-gradient(135deg, ${BRANDING.colors.primary}, ${BRANDING.colors.secondary})`,
-    color: BRANDING.colors.white,
-    border: "none",
-    borderRadius: 16,
-    padding: "14px 18px",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
+  form: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 },
+  fieldLabel: { color: BRANDING.colors.textMuted, fontSize: 12, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 },
+  input: { width: "100%", boxSizing: "border-box", background: "#FCFAF7", border: `1px solid ${BRANDING.colors.border}`, borderRadius: 14, padding: "14px 15px", color: BRANDING.colors.text, fontSize: 14, outline: "none" },
+  toggleRow: { display: "inline-flex", alignItems: "center", gap: 8, color: BRANDING.colors.textMuted, fontSize: 13, fontWeight: 600 },
+  actions: { gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" },
 };

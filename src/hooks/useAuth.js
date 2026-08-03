@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+﻿import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { isAdminRole, isPrivilegedRole, isReceptionRole, isSpecialistRole } from "../lib/roles";
 
@@ -29,14 +29,29 @@ async function loadProfileByUserId(userId) {
     .eq("id", userId)
     .maybeSingle();
 
-  console.log("PROFILE DATA:", profile);
-  console.log("PROFILE ERROR:", profileError);
-
   if (profileError) {
     throw profileError;
   }
 
   return profile;
+}
+
+function buildFriendlyAuthError(error) {
+  const message = error?.message || "";
+
+  if (/failed to fetch/i.test(message) || /fetch failed/i.test(message) || /network/i.test(message)) {
+    return "No se pudo conectar con el servidor. Verifica tu conexión o la configuración de Supabase.";
+  }
+
+  if (
+    /invalid login credentials/i.test(message)
+    || /invalid credentials/i.test(message)
+    || /email not confirmed/i.test(message)
+  ) {
+    return "Correo o contraseña incorrectos.";
+  }
+
+  return message || "No fue posible iniciar sesión.";
 }
 
 export function AuthProvider({ children }) {
@@ -63,9 +78,6 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        console.log("AUTH USER:", authUser);
-        console.log("AUTH USER ID:", authUser?.id);
-
         const profileResult = await loadProfileByUserId(authUser.id);
 
         if (!profileResult) {
@@ -132,19 +144,14 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     setAuthError("");
 
-    console.log("LOGIN EMAIL:", email);
-
     const { data, error } = await supabase.auth.signInWithPassword({
       email: String(email || "").trim(),
       password,
     });
 
-    console.log("AUTH DATA:", data);
-    console.log("AUTH ERROR:", error);
-    console.log("AUTH USER:", data?.user || null);
-    console.log("AUTH USER ID:", data?.user?.id);
-
     if (error) {
+      console.error("Login connection error:", error.message);
+      error.friendlyMessage = buildFriendlyAuthError(error);
       throw error;
     }
 
@@ -181,7 +188,7 @@ export function AuthProvider({ children }) {
     const currentUser = user;
 
     if (!currentUser?.email) {
-      throw new Error("No active session");
+      throw new Error("No hay una sesión activa.");
     }
 
     const { error: reauthError } = await supabase.auth.signInWithPassword({
@@ -193,7 +200,7 @@ export function AuthProvider({ children }) {
       throw reauthError;
     }
 
-    const { error: updateError } = await supabase.auth.updateUser({
+      const { error: updateError } = await supabase.auth.updateUser({
       password: nextPassword,
     });
 
@@ -226,3 +233,4 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
+

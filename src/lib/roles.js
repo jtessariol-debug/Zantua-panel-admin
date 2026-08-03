@@ -1,4 +1,4 @@
-export const USER_ROLES = {
+﻿export const USER_ROLES = {
   OWNER: "owner",
   ADMIN: "admin",
   EMPLOYEE: "employee",
@@ -38,3 +38,4 @@ export function getRoleLabel(role) {
       return "Sin rol";
   }
 }
+

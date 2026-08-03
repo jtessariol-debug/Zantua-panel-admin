@@ -1,19 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
-import PatientOnboardingWizard from "../components/patients/PatientOnboardingWizard";
 import PatientDeactivateModal from "../components/patients/PatientDeactivateModal";
 import PatientDetail from "../components/patients/PatientDetail";
 import PatientForm from "../components/patients/PatientForm";
 import PatientModal from "../components/patients/PatientModal";
+import PatientOnboardingWizard from "../components/patients/PatientOnboardingWizard";
 import PatientsTable from "../components/patients/PatientsTable";
+import ActionButton from "../components/ui/ActionButton";
 import EmptyState from "../components/ui/EmptyState";
+import FilterToolbar from "../components/ui/FilterToolbar";
+import PageHeader from "../components/ui/PageHeader";
 import SearchInput from "../components/ui/SearchInput";
 import SectionCard from "../components/ui/SectionCard";
 import { useAuth } from "../hooks/useAuth";
-import { fetchConsentLookups, createInformedConsent, upsertClinicalHistory } from "../services/clinical";
+import { BRANDING } from "../lib/branding";
+import { createInformedConsent, fetchConsentLookups, upsertClinicalHistory } from "../services/clinical";
 import { createPatient, deactivatePatient, fetchPatients, reactivatePatient, updatePatient } from "../services/patients";
 import { exportConsentPDF } from "../utils/exportPDF";
-import { useNavigate } from "react-router-dom";
 
 export default function PatientsPage() {
   const { profile, isAdmin } = useAuth();
@@ -49,7 +53,6 @@ export default function PatientsPage() {
         setLoading(false);
         return;
       }
-
       const result = await fetchPatients({ active: statusFilter !== "inactive" });
       setPatients(result);
     } catch (error) {
@@ -71,7 +74,6 @@ export default function PatientsPage() {
   const filteredPatients = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return patients;
-
     return patients.filter((patient) => (
       patient.full_name?.toLowerCase().includes(term)
       || patient.phone?.toLowerCase().includes(term)
@@ -82,19 +84,15 @@ export default function PatientsPage() {
 
   async function handleDeactivatePatient() {
     if (!deactivationTarget) return;
-
     setSaving(true);
     setFeedback({ type: "", message: "" });
-
     try {
       await deactivatePatient(deactivationTarget.id, deactivationReason, profile);
       setDeactivationTarget(null);
       setDeactivationReason("");
       setFeedback({ type: "success", message: "Paciente dado de baja correctamente." });
       await loadPatients();
-      if (selectedPatient?.id === deactivationTarget.id) {
-        setSelectedPatient(null);
-      }
+      if (selectedPatient?.id === deactivationTarget.id) setSelectedPatient(null);
     } catch (error) {
       console.error(error);
       setFeedback({ type: "error", message: error.message || "No fue posible dar de baja al paciente." });
@@ -105,10 +103,8 @@ export default function PatientsPage() {
 
   async function handleReactivatePatient() {
     if (!reactivationTarget) return;
-
     setSaving(true);
     setFeedback({ type: "", message: "" });
-
     try {
       await reactivatePatient(reactivationTarget.id, profile);
       setReactivationTarget(null);
@@ -125,7 +121,6 @@ export default function PatientsPage() {
   async function handleCreate(payload) {
     setSaving(true);
     setFeedback({ type: "", message: "" });
-
     try {
       const created = await createPatient(payload);
       setPatients((current) => [created, ...current]);
@@ -141,10 +136,8 @@ export default function PatientsPage() {
 
   async function handleSaveClinicalHistory(payload) {
     if (!onboardingPatient) return;
-
     setSaving(true);
     setFeedback({ type: "", message: "" });
-
     try {
       await upsertClinicalHistory(onboardingPatient.id, payload, null);
       setOnboardingStep("consent");
@@ -163,35 +156,20 @@ export default function PatientsPage() {
 
   async function handleSaveConsent(payload) {
     if (!onboardingPatient) return;
-
     setSaving(true);
     setFeedback({ type: "", message: "" });
-
     try {
-      const createdClient = onboardingPatient;
-      const consentText = payload.consent_text;
-      const patientName = payload.patient_name;
-      const nationalId = payload.national_id;
-      const signatureData = payload.signature_data;
       const consentPayload = {
-        client_id: createdClient.id,
-        consent_text: consentText,
-        patient_name: patientName,
-        national_id: nationalId,
-        signature_data: signatureData,
+        client_id: onboardingPatient.id,
+        consent_text: payload.consent_text,
+        patient_name: payload.patient_name,
+        national_id: payload.national_id,
+        signature_data: payload.signature_data,
         signed_at: new Date().toISOString(),
       };
-
-      console.log("CREATED CLIENT:", createdClient);
-      console.log("CONSENT TEXT:", consentText);
-      console.log("PATIENT NAME:", patientName);
-      console.log("NATIONAL ID:", nationalId);
-      console.log("SIGNATURE DATA:", signatureData);
-      console.log("CONSENT PAYLOAD:", consentPayload);
-
-      const consent = await createInformedConsent(createdClient.id, consentPayload);
+      const consent = await createInformedConsent(onboardingPatient.id, consentPayload);
       setGeneratedConsent(consent);
-      await exportConsentPDF(createdClient, consent);
+      await exportConsentPDF(onboardingPatient, consent);
       setOnboardingStep("done");
       setFeedback({ type: "success", message: "Consentimiento guardado y PDF generado correctamente." });
     } catch (error) {
@@ -212,17 +190,13 @@ export default function PatientsPage() {
   function handleFinishOnboarding() {
     const patientId = onboardingPatient?.id;
     resetOnboarding();
-    if (patientId) {
-      navigate(`/client/${patientId}`);
-    }
+    if (patientId) navigate(`/client/${patientId}`);
   }
 
   async function handleEdit(payload) {
     if (!editingPatient) return;
-
     setSaving(true);
     setFeedback({ type: "", message: "" });
-
     try {
       const updated = await updatePatient(editingPatient.id, payload);
       setPatients((current) => current.map((patient) => (patient.id === updated.id ? updated : patient)));
@@ -239,24 +213,16 @@ export default function PatientsPage() {
   return (
     <AppLayout>
       <div style={styles.page}>
-        <div style={styles.header}>
-          <div>
-            <h1 style={styles.title}>Pacientes</h1>
-            <p style={styles.subtitle}>Gestión de pacientes y datos de contacto</p>
-          </div>
-
-          <button type="button" onClick={() => setShowCreateModal(true)} style={styles.primaryButton}>
-            + Nuevo paciente
-          </button>
-        </div>
+        <PageHeader
+          eyebrow="Pacientes"
+          title="Pacientes"
+          subtitle="Gestión de pacientes, contacto, historial y flujo clínico inicial con una lectura más ordenada."
+          actions={<ActionButton onClick={() => setShowCreateModal(true)}>Nuevo paciente</ActionButton>}
+        />
 
         <SectionCard title="Listado de pacientes" subtitle="Busca, consulta y actualiza la información base de cada paciente.">
-          <div style={styles.toolbar}>
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Buscar por nombre, teléfono, correo o cédula"
-            />
+          <FilterToolbar>
+            <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre, teléfono, correo o cédula" />
             <div style={styles.segmented}>
               <button
                 type="button"
@@ -275,12 +241,10 @@ export default function PatientsPage() {
                 </button>
               ) : null}
             </div>
-          </div>
+          </FilterToolbar>
 
           {feedback.message ? (
-            <div style={feedback.type === "error" ? styles.errorBanner : styles.successBanner}>
-              {feedback.message}
-            </div>
+            <div style={feedback.type === "error" ? styles.errorBanner : styles.successBanner}>{feedback.message}</div>
           ) : null}
 
           <div style={{ marginTop: 18 }}>
@@ -314,13 +278,7 @@ export default function PatientsPage() {
                     description={statusFilter === "inactive"
                       ? "Cuando des de baja pacientes, aparecerán aquí con su fecha y motivo."
                       : "Comienza creando el primer paciente para empezar a construir el historial clínico y operativo del centro."}
-                    action={(
-                      statusFilter === "active" ? (
-                        <button type="button" onClick={() => setShowCreateModal(true)} style={styles.primaryButton}>
-                          Crear primer paciente
-                        </button>
-                      ) : null
-                    )}
+                    action={statusFilter === "active" ? <ActionButton onClick={() => setShowCreateModal(true)}>Crear primer paciente</ActionButton> : null}
                   />
                 )}
               />
@@ -330,12 +288,7 @@ export default function PatientsPage() {
       </div>
 
       {showCreateModal ? (
-        <PatientModal
-          title="Nuevo paciente"
-          subtitle="Flujo clínico inicial: datos del paciente, historial clínico y consentimiento informado."
-          onClose={resetOnboarding}
-          wide
-        >
+        <PatientModal title="Nuevo paciente" subtitle="Flujo clínico inicial: datos del paciente, historial clínico y consentimiento informado." onClose={resetOnboarding} wide>
           <PatientOnboardingWizard
             lookups={consentLookups}
             patient={onboardingPatient}
@@ -358,11 +311,7 @@ export default function PatientsPage() {
       ) : null}
 
       {editingPatient ? (
-        <PatientModal
-          title="Editar paciente"
-          subtitle="Actualiza la información de contacto y referencia del paciente."
-          onClose={() => setEditingPatient(null)}
-        >
+        <PatientModal title="Editar paciente" subtitle="Actualiza la información de contacto y referencia del paciente." onClose={() => setEditingPatient(null)}>
           <PatientForm
             initialValues={editingPatient}
             onSubmit={handleEdit}
@@ -374,12 +323,7 @@ export default function PatientsPage() {
       ) : null}
 
       {selectedPatient ? (
-        <PatientModal
-          title="Detalle del paciente"
-          subtitle="Resumen de contacto e información clínica base."
-          onClose={() => setSelectedPatient(null)}
-          wide
-        >
+        <PatientModal title="Detalle del paciente" subtitle="Resumen de contacto e información clínica base." onClose={() => setSelectedPatient(null)} wide>
           <PatientDetail patient={selectedPatient} />
         </PatientModal>
       ) : null}
@@ -391,10 +335,7 @@ export default function PatientsPage() {
           reason={deactivationReason}
           onReasonChange={setDeactivationReason}
           onConfirm={handleDeactivatePatient}
-          onClose={() => {
-            setDeactivationTarget(null);
-            setDeactivationReason("");
-          }}
+          onClose={() => { setDeactivationTarget(null); setDeactivationReason(""); }}
           loading={saving}
         />
       ) : null}
@@ -415,51 +356,21 @@ export default function PatientsPage() {
 }
 
 const styles = {
-  page: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 24,
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  title: {
-    color: "#241F1D",
-    fontSize: 34,
-    fontWeight: 700,
-    margin: 0,
-  },
-  subtitle: {
-    color: "#8B7E74",
-    fontSize: 15,
-    margin: "8px 0 0",
-    lineHeight: 1.6,
-  },
-  toolbar: {
-    display: "flex",
-    gap: 12,
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
+  page: { display: "flex", flexDirection: "column", gap: 24 },
   segmented: {
     display: "inline-flex",
     background: "#FCFAF7",
-    border: "1px solid #E7DACE",
-    borderRadius: 16,
+    border: `1px solid ${BRANDING.colors.border}`,
+    borderRadius: 18,
     padding: 4,
     gap: 4,
     flexWrap: "wrap",
   },
   segmentButton: {
     background: "transparent",
-    color: "#6F6258",
+    color: BRANDING.colors.textMuted,
     border: "none",
-    borderRadius: 12,
+    borderRadius: 14,
     padding: "10px 14px",
     fontSize: 13,
     fontWeight: 700,
@@ -467,23 +378,9 @@ const styles = {
   },
   segmentButtonActive: {
     background: "#EAF3EE",
-    color: "#12382F",
+    color: BRANDING.colors.primaryStrong,
   },
-  primaryButton: {
-    background: "linear-gradient(135deg, #C38A63, #A85A66)",
-    color: "#fff",
-    border: "none",
-    borderRadius: 16,
-    padding: "14px 18px",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  loadingCopy: {
-    color: "#8A7B72",
-    fontSize: 14,
-    padding: "8px 0",
-  },
+  loadingCopy: { color: BRANDING.colors.textMuted, fontSize: 14, padding: "8px 0" },
   errorBanner: {
     background: "rgba(209, 109, 120, 0.1)",
     border: "1px solid rgba(209, 109, 120, 0.28)",

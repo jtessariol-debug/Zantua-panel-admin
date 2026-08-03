@@ -1,3 +1,5 @@
+import { BRANDING } from "../../lib/branding";
+
 export default function InventoryTabs({ activeTab, onChange }) {
   const tabs = [
     { key: "products", label: "Productos de venta" },
@@ -29,24 +31,25 @@ const styles = {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
-    background: "#F5EFE8",
-    borderRadius: 18,
+    background: "#F6F0E7",
+    border: `1px solid ${BRANDING.colors.border}`,
+    borderRadius: 20,
     padding: 6,
   },
   tab: {
     background: "transparent",
     border: "1px solid transparent",
     borderRadius: 14,
-    padding: "12px 14px",
-    color: "#7A6E67",
-    fontSize: 14,
+    padding: "11px 14px",
+    color: BRANDING.colors.textMuted,
+    fontSize: 13,
     fontWeight: 700,
     cursor: "pointer",
   },
   tabActive: {
-    background: "#FFFFFF",
-    borderColor: "#E8DBCF",
-    color: "#A15A58",
-    boxShadow: "0 8px 18px rgba(75, 52, 35, 0.06)",
+    background: BRANDING.colors.card,
+    borderColor: "#D8E7E0",
+    color: BRANDING.colors.primaryStrong,
+    boxShadow: "0 8px 18px rgba(18, 56, 47, 0.06)",
   },
 };

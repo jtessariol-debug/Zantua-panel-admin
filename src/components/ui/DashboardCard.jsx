@@ -3,10 +3,12 @@ import { BRANDING } from "../../lib/branding";
 export default function DashboardCard({ title, value, description, icon: Icon, accent }) {
   return (
     <article style={styles.card}>
-      <div style={{ ...styles.iconWrap, background: accent.background, color: accent.color }}>
-        {Icon ? <Icon size={20} strokeWidth={2.1} /> : null}
+      <div style={styles.topRow}>
+        <div style={{ ...styles.iconWrap, background: accent.background, color: accent.color }}>
+          {Icon ? <Icon size={19} strokeWidth={2.1} /> : null}
+        </div>
+        <div style={styles.title}>{title}</div>
       </div>
-      <div style={styles.title}>{title}</div>
       <div style={styles.value}>{value}</div>
       <div style={styles.description}>{description}</div>
     </article>
@@ -17,12 +19,17 @@ const styles = {
   card: {
     background: BRANDING.colors.card,
     border: `1px solid ${BRANDING.colors.border}`,
-    borderRadius: 22,
-    boxShadow: "0 14px 32px rgba(18, 56, 47, 0.05)",
+    borderRadius: 24,
+    boxShadow: "0 18px 34px rgba(18, 56, 47, 0.05)",
     padding: 20,
     minHeight: 170,
     display: "flex",
     flexDirection: "column",
+  },
+  topRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
   },
   iconWrap: {
     width: 46,
@@ -31,13 +38,13 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 18,
   },
   title: {
     color: BRANDING.colors.textMuted,
-    fontSize: 13,
+    fontSize: 12,
     textTransform: "uppercase",
     fontWeight: 700,
+    letterSpacing: 0.35,
   },
   value: {
     color: BRANDING.colors.primaryStrong,

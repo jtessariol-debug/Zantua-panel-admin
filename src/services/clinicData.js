@@ -1,11 +1,23 @@
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
-import { db } from "../firebase/config";
-import { supabase } from "../lib/supabaseClient";
+﻿import { supabase } from "../lib/supabaseClient";
 import { SPECIALIST_SCHEDULES } from "../lib/navigation";
 import { fetchAppointments } from "./appointments";
 
 function safeString(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function isVisibleOperationalSpecialist(specialist) {
+  const normalizedName = String(specialist?.full_name || specialist?.name || "")
+    .trim()
+    .toUpperCase();
+
+  return (
+    specialist?.active === true
+    && normalizedName !== "MARJAN PEÑA"
+    && normalizedName !== "MARJAN PENA"
+    && !normalizedName.includes("HISTÓRICO GOLDIE")
+    && !normalizedName.includes("HISTORICO GOLDIE")
+  );
 }
 
 function getDateFromAppointment(record) {
@@ -68,21 +80,6 @@ function deriveCabinName(item) {
     || "Cabina no asignada";
 }
 
-export function subscribeClients({ isOwner, userId, onData, onError }) {
-  const clientsRef = collection(db, "clients");
-  const clientsQuery = isOwner
-    ? query(clientsRef, orderBy("createdAt", "desc"))
-    : query(clientsRef, where("createdByUserId", "==", userId), orderBy("createdAt", "desc"));
-
-  return onSnapshot(
-    clientsQuery,
-    (snapshot) => {
-      onData(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
-    },
-    onError
-  );
-}
-
 export async function fetchSupabaseAppointments({ specialistId = null } = {}) {
   try {
     const result = await fetchAppointments({ specialistId });
@@ -128,14 +125,16 @@ export async function fetchSupabaseSpecialists({ specialistId = null } = {}) {
       }));
     }
 
-    return data.map((specialist) => {
+    return data
+      .filter(isVisibleOperationalSpecialist)
+      .map((specialist) => {
       const fallback = SPECIALIST_SCHEDULES.find((entry) => safeString(entry.name) === safeString(specialist.full_name || specialist.name));
       return {
         ...specialist,
         full_name: specialist.full_name || specialist.name,
         schedule: specialist.schedule || fallback?.schedule || "Horario no definido",
       };
-    });
+      });
   } catch (error) {
     console.error("Error loading specialists from Supabase", error);
     return SPECIALIST_SCHEDULES.map((item) => ({
@@ -228,3 +227,5 @@ export function mapSpecialistAvailability(specialists, appointments) {
     };
   });
 }
+
+

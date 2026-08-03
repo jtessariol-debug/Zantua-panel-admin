@@ -3,39 +3,45 @@ import { BRANDING } from "../../lib/branding";
 export default function EmptyState({ title, description, action }) {
   return (
     <div style={styles.wrap}>
-      <div style={styles.iconWrap}>✦</div>
+      <div style={styles.iconWrap}>
+        <span style={styles.iconMark}>+</span>
+      </div>
       <h3 style={styles.title}>{title}</h3>
       <p style={styles.description}>{description}</p>
-      {action}
+      {action ? <div style={styles.actionWrap}>{action}</div> : null}
     </div>
   );
 }
 
 const styles = {
   wrap: {
-    minHeight: 180,
+    minHeight: 190,
     border: `1px dashed ${BRANDING.colors.border}`,
-    borderRadius: 20,
-    background: "#FCFAF4",
+    borderRadius: 24,
+    background: "#FCFAF5",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",
     flexDirection: "column",
-    padding: 28,
+    padding: 30,
     gap: 12,
   },
   iconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: "50%",
-    background: BRANDING.colors.primarySoft,
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    background: "#F1EADF",
     color: BRANDING.colors.primaryStrong,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 18,
-    fontWeight: 700,
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+  },
+  iconMark: {
+    fontSize: 22,
+    fontWeight: 400,
+    lineHeight: 1,
   },
   title: {
     color: BRANDING.colors.primaryStrong,
@@ -46,8 +52,11 @@ const styles = {
   description: {
     color: BRANDING.colors.textMuted,
     fontSize: 14,
-    lineHeight: 1.6,
-    maxWidth: 420,
+    lineHeight: 1.7,
+    maxWidth: 430,
     margin: 0,
+  },
+  actionWrap: {
+    marginTop: 6,
   },
 };

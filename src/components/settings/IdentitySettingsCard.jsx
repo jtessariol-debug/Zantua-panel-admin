@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import BrandMark from "../ui/BrandMark";
+import ActionButton from "../ui/ActionButton";
 import SectionCard from "../ui/SectionCard";
 import { BRANDING } from "../../lib/branding";
 import PreparedNotice from "./PreparedNotice";
@@ -70,9 +71,9 @@ export default function IdentitySettingsCard({ value, persistenceAvailable, onSa
           </div>
 
           <div style={styles.actions}>
-            <button type="submit" style={styles.primaryButton} disabled={saving}>
+            <ActionButton type="submit" disabled={saving}>
               {saving ? "Guardando..." : "Guardar identidad"}
-            </button>
+            </ActionButton>
           </div>
         </div>
       </form>
@@ -90,98 +91,18 @@ function Field({ label, children, full = false }) {
 }
 
 const styles = {
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "320px 1fr",
-    gap: 18,
-  },
-  previewCard: {
-    background: "#FCFAF4",
-    border: `1px solid ${BRANDING.colors.border}`,
-    borderRadius: 22,
-    padding: 20,
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-    alignItems: "flex-start",
-  },
-  previewLabel: {
-    color: BRANDING.colors.textMuted,
-    fontSize: 12,
-    textTransform: "uppercase",
-    fontWeight: 700,
-  },
-  previewName: {
-    color: BRANDING.colors.primaryStrong,
-    fontSize: 18,
-    fontWeight: 700,
-  },
-  previewAddress: {
-    color: BRANDING.colors.textMuted,
-    fontSize: 13,
-    lineHeight: 1.6,
-  },
-  formGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 16,
-    alignContent: "start",
-  },
-  fieldLabel: {
-    color: BRANDING.colors.textMuted,
-    fontSize: 12,
-    textTransform: "uppercase",
-    fontWeight: 700,
-    marginBottom: 6,
-  },
-  input: {
-    width: "100%",
-    boxSizing: "border-box",
-    background: "#FCFAF7",
-    border: `1px solid ${BRANDING.colors.border}`,
-    borderRadius: 14,
-    padding: "14px 15px",
-    color: BRANDING.colors.text,
-    fontSize: 14,
-    outline: "none",
-  },
-  paletteWrap: {
-    gridColumn: "1 / -1",
-  },
-  paletteRow: {
-    display: "flex",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-  swatchBlock: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  },
-  swatch: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    border: `1px solid ${BRANDING.colors.border}`,
-  },
-  swatchText: {
-    color: BRANDING.colors.textMuted,
-    fontSize: 11,
-    fontWeight: 600,
-  },
-  actions: {
-    gridColumn: "1 / -1",
-    display: "flex",
-    justifyContent: "flex-end",
-  },
-  primaryButton: {
-    background: `linear-gradient(135deg, ${BRANDING.colors.primary}, ${BRANDING.colors.secondary})`,
-    color: BRANDING.colors.white,
-    border: "none",
-    borderRadius: 16,
-    padding: "14px 18px",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
+  grid: { display: "grid", gridTemplateColumns: "320px 1fr", gap: 18 },
+  previewCard: { background: "#FCFAF4", border: `1px solid ${BRANDING.colors.border}`, borderRadius: 22, padding: 20, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" },
+  previewLabel: { color: BRANDING.colors.textMuted, fontSize: 12, textTransform: "uppercase", fontWeight: 700 },
+  previewName: { color: BRANDING.colors.primaryStrong, fontSize: 18, fontWeight: 700 },
+  previewAddress: { color: BRANDING.colors.textMuted, fontSize: 13, lineHeight: 1.6 },
+  formGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, alignContent: "start" },
+  fieldLabel: { color: BRANDING.colors.textMuted, fontSize: 12, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 },
+  input: { width: "100%", boxSizing: "border-box", background: "#FCFAF7", border: `1px solid ${BRANDING.colors.border}`, borderRadius: 14, padding: "14px 15px", color: BRANDING.colors.text, fontSize: 14, outline: "none" },
+  paletteWrap: { gridColumn: "1 / -1" },
+  paletteRow: { display: "flex", gap: 12, flexWrap: "wrap" },
+  swatchBlock: { display: "flex", flexDirection: "column", gap: 8 },
+  swatch: { width: 56, height: 56, borderRadius: 14, border: `1px solid ${BRANDING.colors.border}` },
+  swatchText: { color: BRANDING.colors.textMuted, fontSize: 11, fontWeight: 600 },
+  actions: { gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" },
 };

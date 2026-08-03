@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabaseClient";
+﻿import { supabase } from "../lib/supabaseClient";
 
 function formatPatientRecord(record) {
   return {
@@ -135,3 +135,4 @@ export async function reactivatePatient(id, profile) {
 
   return formatPatientRecord(data);
 }
+

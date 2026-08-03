@@ -1,3 +1,5 @@
+import { BRANDING } from "../../lib/branding";
+
 export default function DataTable({ columns, rows, emptyState, onRowClick }) {
   if (!rows || rows.length === 0) {
     return emptyState;
@@ -38,27 +40,32 @@ export default function DataTable({ columns, rows, emptyState, onRowClick }) {
 const styles = {
   wrap: {
     overflowX: "auto",
+    marginTop: 2,
   },
   table: {
     width: "100%",
-    borderCollapse: "collapse",
+    borderCollapse: "separate",
+    borderSpacing: 0,
   },
   head: {
     textAlign: "left",
-    color: "#8A7B72",
+    color: BRANDING.colors.textMuted,
     fontSize: 12,
+    letterSpacing: 0.35,
     textTransform: "uppercase",
-    padding: "0 0 14px",
-    borderBottom: "1px solid #F0E8E1",
+    padding: "0 14px 14px 0",
+    borderBottom: "1px solid #EEE4D8",
     fontWeight: 700,
+    whiteSpace: "nowrap",
   },
   row: {
-    borderBottom: "1px solid #F5EFE9",
+    transition: "background-color 160ms ease",
   },
   cell: {
-    padding: "16px 0",
-    color: "#2A2522",
+    padding: "18px 14px 18px 0",
+    color: BRANDING.colors.text,
     fontSize: 14,
     verticalAlign: "middle",
+    borderBottom: "1px solid #F5EEE7",
   },
 };

@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  BadgeDollarSign,
+  Building2,
+  CalendarCog,
+  DoorOpen,
+  ReceiptText,
+  ShieldCheck,
+  Sparkles,
+  UserCog,
+} from "lucide-react";
 import AppLayout from "../components/layout/AppLayout";
-import DashboardCard from "../components/ui/DashboardCard";
-import SectionCard from "../components/ui/SectionCard";
-import SettingsTabs from "../components/settings/SettingsTabs";
-import IdentitySettingsCard from "../components/settings/IdentitySettingsCard";
-import SchedulesSettings from "../components/settings/SchedulesSettings";
 import CabinsSettings from "../components/settings/CabinsSettings";
-import ServicesSettings from "../components/settings/ServicesSettings";
 import EmployeesSettings from "../components/settings/EmployeesSettings";
+import IdentitySettingsCard from "../components/settings/IdentitySettingsCard";
 import PayrollSettings from "../components/settings/PayrollSettings";
-import SecuritySettings from "../components/settings/SecuritySettings";
 import RulesSettings, {
   SettingsCheckbox,
   SettingsField,
@@ -17,20 +21,32 @@ import RulesSettings, {
   SettingsSelect,
   SettingsTextarea,
 } from "../components/settings/RulesSettings";
+import SchedulesSettings from "../components/settings/SchedulesSettings";
+import SecuritySettings from "../components/settings/SecuritySettings";
+import ServiceOffersSettings from "../components/settings/ServiceOffersSettings";
+import ServicesSettings from "../components/settings/ServicesSettings";
+import SettingsTabs from "../components/settings/SettingsTabs";
+import DashboardCard from "../components/ui/DashboardCard";
+import PageHeader from "../components/ui/PageHeader";
+import SectionCard from "../components/ui/SectionCard";
+import { useAuth } from "../hooks/useAuth";
+import { BRANDING } from "../lib/branding";
 import {
+  createCabinSettings,
   createEmployeeSettings,
-  createPayrollPayment,
+  createMissingEmployeeRecords,
+  createServiceOfferSettings,
   createServiceSettings,
   fetchSettingsData,
+  getOperationalSpecialists,
   saveSystemSetting,
   setEmployeeInactive,
   updateCabinSettings,
   updateEmployeeSettings,
+  updateServiceOfferSettings,
   updateServiceSettings,
   updateSpecialistSettings,
 } from "../services/settings";
-import { BRANDING } from "../lib/branding";
-import { BadgeDollarSign, Building2, CalendarCog, DoorOpen, ReceiptText, ShieldCheck, Sparkles, UserCog, WalletCards, Warehouse } from "lucide-react";
 
 const TABS = [
   { key: "identity", label: "Identidad del centro" },
@@ -47,6 +63,7 @@ const TABS = [
 ];
 
 export default function SettingsPage() {
+  const { profile, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState("identity");
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState("");
@@ -65,7 +82,10 @@ export default function SettingsPage() {
     specialists: [],
     cabins: [],
     services: [],
+    serviceOffers: [],
     employees: [],
+    teamRows: [],
+    teamProfiles: [],
     employeesPersistenceAvailable: false,
     payrollPayments: [],
     payrollPersistenceAvailable: false,
@@ -79,7 +99,10 @@ export default function SettingsPage() {
       setData(result);
     } catch (error) {
       console.error(error);
-      setFeedback({ type: "error", message: error.message || "No fue posible cargar la configuración." });
+      setFeedback({
+        type: "error",
+        message: error.message || "No fue posible cargar la configuración.",
+      });
     } finally {
       setLoading(false);
     }
@@ -89,10 +112,15 @@ export default function SettingsPage() {
     loadSettings();
   }, []);
 
+  const operationalSpecialists = useMemo(
+    () => getOperationalSpecialists(data.specialists),
+    [data.specialists]
+  );
+
   const metrics = useMemo(() => ([
     {
       title: "Especialistas activas",
-      value: data.specialists.filter((item) => item.active !== false).length,
+      value: operationalSpecialists.length,
       description: "Disponibilidad operativa visible para agenda y seguimiento clínico.",
       icon: UserCog,
       accent: { background: "#EAF3EE", color: BRANDING.colors.primaryStrong },
@@ -112,13 +140,13 @@ export default function SettingsPage() {
       accent: { background: "#F3EBDD", color: "#9A774A" },
     },
     {
-      title: "Empleados registrados",
-      value: data.employees.length,
-      description: "Registro interno para altas, bajas y seguimiento administrativo.",
+      title: "Equipo consolidado",
+      value: data.teamRows.length,
+      description: "Vista administrativa consolidada entre empleados, especialistas y accesos.",
       icon: Building2,
       accent: { background: "#E4F2EA", color: BRANDING.colors.secondary },
     },
-  ]), [data]);
+  ]), [data, operationalSpecialists]);
 
   async function persistSetting(settingKey, value, successMessage) {
     setSavingKey(settingKey);
@@ -135,7 +163,10 @@ export default function SettingsPage() {
       setFeedback({ type: "success", message: successMessage });
     } catch (error) {
       console.error(error);
-      setFeedback({ type: "error", message: error.message || "No fue posible guardar la configuración." });
+      setFeedback({
+        type: "error",
+        message: error.message || "No fue posible guardar la configuración.",
+      });
     } finally {
       setSavingKey("");
     }
@@ -145,12 +176,13 @@ export default function SettingsPage() {
     setSavingKey(id);
     setFeedback({ type: "", message: "" });
     try {
-      const updated = await updateSpecialistSettings(id, payload);
+      const updated = await updateSpecialistSettings(id, payload, profile);
       setData((current) => ({
         ...current,
         specialists: current.specialists.map((item) => (item.id === id ? updated : item)),
       }));
-      setFeedback({ type: "success", message: "Especialista actualizada correctamente." });
+      await loadSettings();
+      setFeedback({ type: "success", message: "Horario actualizado correctamente." });
     } catch (error) {
       console.error(error);
       setFeedback({ type: "error", message: error.message || "No fue posible actualizar la especialista." });
@@ -163,7 +195,7 @@ export default function SettingsPage() {
     setSavingKey(id);
     setFeedback({ type: "", message: "" });
     try {
-      const updated = await updateCabinSettings(id, payload);
+      const updated = await updateCabinSettings(id, payload, profile);
       setData((current) => ({
         ...current,
         cabins: current.cabins.map((item) => (item.id === id ? updated : item)),
@@ -177,12 +209,34 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleCreateCabin(payload) {
+    setSavingKey("cabin");
+    setFeedback({ type: "", message: "" });
+    try {
+      const created = await createCabinSettings(payload, profile);
+      setData((current) => ({
+        ...current,
+        cabins: [...current.cabins, created].sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+      }));
+      setFeedback({ type: "success", message: "Cabina creada correctamente." });
+    } catch (error) {
+      console.error(error);
+      setFeedback({ type: "error", message: error.message || "No fue posible crear la cabina." });
+      throw error;
+    } finally {
+      setSavingKey("");
+    }
+  }
+
   async function handleCreateService(payload) {
     setSavingKey("service");
     setFeedback({ type: "", message: "" });
     try {
-      const created = await createServiceSettings(payload);
-      setData((current) => ({ ...current, services: [...current.services, created].sort((a, b) => (a.name || "").localeCompare(b.name || "")) }));
+      const created = await createServiceSettings(payload, profile);
+      setData((current) => ({
+        ...current,
+        services: [...current.services, created].sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+      }));
       setFeedback({ type: "success", message: "Servicio creado correctamente." });
     } catch (error) {
       console.error(error);
@@ -197,7 +251,7 @@ export default function SettingsPage() {
     setSavingKey("service");
     setFeedback({ type: "", message: "" });
     try {
-      const updated = await updateServiceSettings(id, payload);
+      const updated = await updateServiceSettings(id, payload, profile);
       setData((current) => ({
         ...current,
         services: current.services.map((item) => (item.id === id ? updated : item)),
@@ -212,13 +266,51 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleCreateServiceOffer(payload) {
+    setSavingKey("service-offer");
+    setFeedback({ type: "", message: "" });
+    try {
+      const created = await createServiceOfferSettings(payload, profile);
+      setData((current) => ({
+        ...current,
+        serviceOffers: [created, ...current.serviceOffers],
+      }));
+      setFeedback({ type: "success", message: "Oferta creada correctamente." });
+    } catch (error) {
+      console.error(error);
+      setFeedback({ type: "error", message: error.message || "No fue posible crear la oferta." });
+      throw error;
+    } finally {
+      setSavingKey("");
+    }
+  }
+
+  async function handleUpdateServiceOffer(id, payload) {
+    setSavingKey("service-offer");
+    setFeedback({ type: "", message: "" });
+    try {
+      const updated = await updateServiceOfferSettings(id, payload, profile);
+      setData((current) => ({
+        ...current,
+        serviceOffers: current.serviceOffers.map((item) => (item.id === id ? updated : item)),
+      }));
+      setFeedback({ type: "success", message: "Oferta actualizada correctamente." });
+    } catch (error) {
+      console.error(error);
+      setFeedback({ type: "error", message: error.message || "No fue posible actualizar la oferta." });
+      throw error;
+    } finally {
+      setSavingKey("");
+    }
+  }
+
   async function handleCreateEmployee(payload) {
     setSavingKey("employee");
     setFeedback({ type: "", message: "" });
     try {
-      const created = await createEmployeeSettings(payload);
-      setData((current) => ({ ...current, employees: [...current.employees, created].sort((a, b) => (a.full_name || "").localeCompare(b.full_name || "")) }));
-      setFeedback({ type: "success", message: "Empleado creado correctamente." });
+      await createEmployeeSettings(payload, profile);
+      await loadSettings();
+      setFeedback({ type: "success", message: "Ficha administrativa creada correctamente." });
     } catch (error) {
       console.error(error);
       setFeedback({ type: "error", message: error.message || "No fue posible crear el empleado." });
@@ -232,12 +324,9 @@ export default function SettingsPage() {
     setSavingKey("employee");
     setFeedback({ type: "", message: "" });
     try {
-      const updated = await updateEmployeeSettings(id, payload);
-      setData((current) => ({
-        ...current,
-        employees: current.employees.map((item) => (item.id === id ? updated : item)),
-      }));
-      setFeedback({ type: "success", message: "Empleado actualizado correctamente." });
+      await updateEmployeeSettings(id, payload, profile);
+      await loadSettings();
+      setFeedback({ type: "success", message: "Ficha administrativa actualizada correctamente." });
     } catch (error) {
       console.error(error);
       setFeedback({ type: "error", message: error.message || "No fue posible actualizar el empleado." });
@@ -251,30 +340,58 @@ export default function SettingsPage() {
     setSavingKey(id);
     setFeedback({ type: "", message: "" });
     try {
-      const updated = await setEmployeeInactive(id);
-      setData((current) => ({
-        ...current,
-        employees: current.employees.map((item) => (item.id === id ? updated : item)),
-      }));
-      setFeedback({ type: "success", message: "Empleado dado de baja correctamente." });
+      await setEmployeeInactive(id, profile);
+      await loadSettings();
+      setFeedback({ type: "success", message: "Ficha administrativa dada de baja correctamente." });
     } catch (error) {
       console.error(error);
       setFeedback({ type: "error", message: error.message || "No fue posible dar de baja al empleado." });
+      throw error;
     } finally {
       setSavingKey("");
     }
   }
 
-  async function handleCreatePayroll(payload) {
-    setSavingKey("payroll");
+  async function handleReactivateEmployee(id, row) {
+    setSavingKey(id);
     setFeedback({ type: "", message: "" });
     try {
-      const created = await createPayrollPayment(payload);
-      setData((current) => ({ ...current, payrollPayments: [created, ...current.payrollPayments] }));
-      setFeedback({ type: "success", message: "Pago de nómina registrado correctamente." });
+      await updateEmployeeSettings(id, {
+        ...row,
+        status: "activo",
+        termination_date: null,
+      }, profile);
+      await loadSettings();
+      setFeedback({ type: "success", message: "Ficha administrativa reactivada correctamente." });
     } catch (error) {
       console.error(error);
-      setFeedback({ type: "error", message: error.message || "No fue posible registrar el pago." });
+      setFeedback({ type: "error", message: error.message || "No fue posible reactivar el empleado." });
+      throw error;
+    } finally {
+      setSavingKey("");
+    }
+  }
+
+  async function handleCreateMissingEmployees() {
+    setSavingKey("employee-missing");
+    setFeedback({ type: "", message: "" });
+    try {
+      const result = await createMissingEmployeeRecords(profile);
+      await loadSettings();
+      if ((result.created || []).length) {
+        setFeedback({
+          type: "success",
+          message: `Se crearon ${result.created.length} fichas administrativas pendientes.`,
+        });
+      } else {
+        setFeedback({
+          type: "success",
+          message: "No había fichas administrativas pendientes por crear.",
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      setFeedback({ type: "error", message: error.message || "No fue posible crear las fichas pendientes." });
       throw error;
     } finally {
       setSavingKey("");
@@ -295,19 +412,21 @@ export default function SettingsPage() {
       case "employees":
         return (
           <EmployeesSettings
-            employees={data.employees}
-            specialists={data.specialists.filter((item) => item.active !== false)}
-            persistenceAvailable={data.employeesPersistenceAvailable}
+            rows={data.teamRows}
+            specialists={operationalSpecialists}
             onCreate={handleCreateEmployee}
             onSave={handleUpdateEmployee}
             onDeactivate={handleDeactivateEmployee}
-            saving={savingKey === "employee"}
+            onReactivate={handleReactivateEmployee}
+            onCreateMissing={handleCreateMissingEmployees}
+            saving={savingKey === "employee" || savingKey === "employee-missing" || Boolean(savingKey && savingKey !== "")}
+            isAdmin={isAdmin}
           />
         );
       case "schedules":
         return (
           <SchedulesSettings
-            specialists={data.specialists}
+            specialists={operationalSpecialists}
             rules={data.settings.scheduling_rules}
             persistenceAvailable={data.settingsPersistenceAvailable}
             onSaveRules={(value) => persistSetting("scheduling_rules", value, "Reglas generales de horarios guardadas correctamente.")}
@@ -317,9 +436,35 @@ export default function SettingsPage() {
           />
         );
       case "cabins":
-        return <CabinsSettings cabins={data.cabins} onSave={handleUpdateCabin} saving={Boolean(savingKey && savingKey !== "")} />;
+        return (
+          <CabinsSettings
+            cabins={isAdmin ? data.cabins : data.cabins.filter((item) => item.active !== false)}
+            onCreate={handleCreateCabin}
+            onSave={handleUpdateCabin}
+            saving={savingKey === "cabin" || Boolean(savingKey && savingKey !== "")}
+            isAdmin={isAdmin}
+          />
+        );
       case "services":
-        return <ServicesSettings services={data.services} onCreate={handleCreateService} onSave={handleUpdateService} saving={savingKey === "service"} />;
+        return (
+          <div style={styles.stack}>
+            <ServicesSettings
+              services={isAdmin ? data.services : data.services.filter((item) => item.active !== false)}
+              onCreate={handleCreateService}
+              onSave={handleUpdateService}
+              saving={savingKey === "service"}
+              isAdmin={isAdmin}
+            />
+            <ServiceOffersSettings
+              offers={isAdmin ? data.serviceOffers : data.serviceOffers.filter((item) => item.active !== false)}
+              services={isAdmin ? data.services : data.services.filter((item) => item.active !== false)}
+              onCreate={handleCreateServiceOffer}
+              onSave={handleUpdateServiceOffer}
+              saving={savingKey === "service-offer"}
+              isAdmin={isAdmin}
+            />
+          </div>
+        );
       case "billing":
         return (
           <RulesSettings
@@ -428,12 +573,11 @@ export default function SettingsPage() {
       case "payroll":
         return (
           <PayrollSettings
-            rows={data.payrollPayments}
-            employees={data.employees}
-            specialists={data.specialists}
+            legacyRows={data.payrollPayments}
             persistenceAvailable={data.payrollPersistenceAvailable}
-            onCreate={handleCreatePayroll}
-            saving={savingKey === "payroll"}
+            companySettings={data.settings.center_identity}
+            profile={profile}
+            isAdmin={isAdmin}
           />
         );
       case "security":
@@ -446,12 +590,11 @@ export default function SettingsPage() {
   return (
     <AppLayout>
       <div style={styles.page}>
-        <div style={styles.header}>
-          <div>
-            <h1 style={styles.title}>Configuración</h1>
-            <p style={styles.subtitle}>Centro administrativo del negocio para identidad, operación clínica, reglas financieras y seguridad visual.</p>
-          </div>
-        </div>
+        <PageHeader
+          eyebrow="Operación administrativa"
+          title="Configuración"
+          subtitle="Centro administrativo para identidad, horarios, servicios, cabinas, empleados y reglas operativas del sistema."
+        />
 
         <div style={styles.metricsGrid}>
           {metrics.map((metric) => <DashboardCard key={metric.title} {...metric} />)}
@@ -465,7 +608,7 @@ export default function SettingsPage() {
 
         <SectionCard
           title="Panel de configuración"
-          subtitle="Gestiona los parámetros operativos del centro sin afectar la experiencia principal del sistema."
+          subtitle="Organiza la operación del centro con una navegación interna clara y separa parámetros operativos de ajustes administrativos."
           action={<SettingsTabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />}
         >
           {loading ? (
@@ -475,12 +618,15 @@ export default function SettingsPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Contexto operativo" subtitle="Resumen de las áreas administrativas cubiertas por esta pantalla.">
+        <SectionCard
+          title="Contexto operativo"
+          subtitle="Resumen de las áreas administrativas cubiertas por esta pantalla."
+        >
           <div style={styles.operationalGrid}>
-            <OperationalHint title="Horarios y agenda" description="Las especialistas ahora pueden administrar disponibilidad real desde Supabase y la agenda consumirá esa configuración." icon={<CalendarCog size={18} />} />
-            <OperationalHint title="Facturación" description="Los parámetros de factura se dejan listos para persistencia sin tocar el módulo de ventas actual." icon={<ReceiptText size={18} />} />
-            <OperationalHint title="Comisiones y nómina" description="La pantalla ya prepara reglas y pagos, pero la creación de usuarios de acceso sigue separada por seguridad." icon={<BadgeDollarSign size={18} />} />
-            <OperationalHint title="Inventario y seguridad" description="Las reglas globales de stock y permisos quedan centralizadas, sin duplicar lógica sensible en frontend." icon={<ShieldCheck size={18} />} />
+            <OperationalHint title="Horarios y agenda" description="Las especialistas administran disponibilidad real desde Supabase y la agenda consume esa misma configuración." icon={<CalendarCog size={18} />} />
+            <OperationalHint title="Facturación" description="Los parámetros de factura permanecen centralizados sin duplicar lógica con el módulo de ventas." icon={<ReceiptText size={18} />} />
+            <OperationalHint title="Comisiones y nómina" description="Las reglas y pagos se mantienen separados del flujo de acceso al sistema por seguridad." icon={<BadgeDollarSign size={18} />} />
+            <OperationalHint title="Inventario y seguridad" description="Stock, roles y permisos se presentan como configuración administrativa sin alterar la lógica sensible existente." icon={<ShieldCheck size={18} />} />
           </div>
         </SectionCard>
       </div>
@@ -500,16 +646,14 @@ function OperationalHint({ icon, title, description }) {
 
 const styles = {
   page: { display: "flex", flexDirection: "column", gap: 24 },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 18, flexWrap: "wrap" },
-  title: { color: BRANDING.colors.primaryStrong, fontSize: 34, fontWeight: 700, margin: 0 },
-  subtitle: { color: BRANDING.colors.textMuted, fontSize: 15, lineHeight: 1.6, margin: "8px 0 0" },
+  stack: { display: "flex", flexDirection: "column", gap: 20 },
   metricsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 },
-  successBanner: { background: "#EAF6ED", border: "1px solid #CFE8D8", color: "#28704B", borderRadius: 16, padding: "14px 16px", fontSize: 14, fontWeight: 600 },
-  errorBanner: { background: "rgba(209, 109, 120, 0.1)", border: "1px solid rgba(209, 109, 120, 0.28)", color: "#A44E60", borderRadius: 16, padding: "14px 16px", fontSize: 14, fontWeight: 600 },
+  successBanner: { background: "#EAF6ED", border: "1px solid #CFE8D8", color: "#28704B", borderRadius: 18, padding: "14px 16px", fontSize: 14, fontWeight: 600 },
+  errorBanner: { background: "rgba(209, 109, 120, 0.1)", border: "1px solid rgba(209, 109, 120, 0.28)", color: "#A44E60", borderRadius: 18, padding: "14px 16px", fontSize: 14, fontWeight: 600 },
   loadingCopy: { color: BRANDING.colors.textMuted, fontSize: 14, padding: "6px 0" },
   checkboxRow: { gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 12 },
   operationalGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 },
-  hintCard: { background: "#FCFAF4", border: `1px solid ${BRANDING.colors.border}`, borderRadius: 20, padding: 18 },
+  hintCard: { background: "#FCFAF4", border: `1px solid ${BRANDING.colors.border}`, borderRadius: 22, padding: 18 },
   hintIcon: { width: 40, height: 40, borderRadius: 14, background: BRANDING.colors.primarySoft, color: BRANDING.colors.primaryStrong, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 },
   hintTitle: { color: BRANDING.colors.primaryStrong, fontSize: 16, fontWeight: 700 },
   hintDescription: { color: BRANDING.colors.textMuted, fontSize: 13, lineHeight: 1.6, marginTop: 8 },

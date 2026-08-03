@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabaseClient";
+﻿import { supabase } from "../lib/supabaseClient";
 
 function normalizeClinicalHistory(record) {
   if (!record) return null;
@@ -135,9 +135,6 @@ export async function createInformedConsent(clientId, payload) {
     .select("*")
     .single();
 
-  console.log("CONSENT INSERT DATA:", consentData);
-  console.log("CONSENT INSERT ERROR:", consentError);
-
   if (consentError) {
     console.error("Error saving informed consent", consentError);
     throw new Error(consentError.message || "No fue posible guardar el consentimiento informado.");
@@ -145,3 +142,4 @@ export async function createInformedConsent(clientId, payload) {
 
   return normalizeInformedConsent(consentData);
 }
+

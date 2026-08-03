@@ -1,6 +1,7 @@
 import {
   BadgeDollarSign,
   CalendarDays,
+  HandCoins,
   LayoutDashboard,
   Package,
   Settings,
@@ -31,6 +32,7 @@ export const NAVIGATION_SECTIONS = [
     items: [
       { label: "Facturación", path: "/billing", icon: WalletCards },
       { label: "Comisiones", path: "/commissions", icon: BadgeDollarSign },
+      { label: "Nómina", path: "/payroll", icon: HandCoins },
       { label: "Inventario", path: "/inventory", icon: Package },
     ],
   },
@@ -61,7 +63,7 @@ export function getNavigationSections(role) {
     return NAVIGATION_SECTIONS
       .map((section) => ({
         ...section,
-        items: section.items.filter((item) => ["/dashboard", "/agenda", "/patients", "/laser", "/billing", "/commissions"].includes(item.path)),
+        items: section.items.filter((item) => ["/dashboard", "/agenda", "/patients", "/laser", "/billing"].includes(item.path)),
       }))
       .filter((section) => section.items.length > 0);
   }
@@ -70,8 +72,9 @@ export function getNavigationSections(role) {
 }
 
 export const SPECIALIST_SCHEDULES = [
-  { name: "Leidy Hernandez", schedule: "7:30 AM - 3:30 PM" },
-  { name: "Marjan Peña", schedule: "7:30 AM - 3:30 PM" },
-  { name: "Rut Vericut", schedule: "12:00 PM - 8:00 PM" },
-  { name: "Anneris Melenciano", schedule: "Agenda abierta" },
+  { name: "ANNERIS MELENCIANO", schedule: "Agenda abierta" },
+  { name: "LEIDY LAURA HERNÁNDEZ", schedule: "7:30 AM - 3:30 PM" },
+  { name: "PENELOPE LUNA", schedule: "7:30 AM - 3:30 PM" },
+  { name: "RIQUEIMELIN ESPIRITUD", schedule: "7:30 AM - 3:30 PM" },
+  { name: "RUT VERICUT", schedule: "12:00 PM - 8:00 PM" },
 ];

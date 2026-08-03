@@ -5,12 +5,21 @@ import LaserSessionDetail from "../components/laser/LaserSessionDetail";
 import LaserSessionForm from "../components/laser/LaserSessionForm";
 import LaserSessionModal from "../components/laser/LaserSessionModal";
 import LaserSessionsTable from "../components/laser/LaserSessionsTable";
+import ActionButton from "../components/ui/ActionButton";
 import DashboardCard from "../components/ui/DashboardCard";
 import EmptyState from "../components/ui/EmptyState";
+import FilterToolbar from "../components/ui/FilterToolbar";
+import PageHeader from "../components/ui/PageHeader";
 import SearchInput from "../components/ui/SearchInput";
 import SectionCard from "../components/ui/SectionCard";
 import { useAuth } from "../hooks/useAuth";
-import { createLaserSession, fetchLaserLookups, fetchLaserSessions, updateLaserSession } from "../services/laser";
+import { BRANDING } from "../lib/branding";
+import {
+  createLaserSession,
+  fetchLaserLookups,
+  fetchLaserSessions,
+  updateLaserSession,
+} from "../services/laser";
 
 function isSameDay(value, reference = new Date()) {
   if (!value) return false;
@@ -67,7 +76,10 @@ export default function LaserPage() {
         setSelectedSpecialist(profile.specialist_id);
       }
     } catch (error) {
-      setFeedback({ type: "error", message: error.message || "No fue posible cargar las sesiones láser." });
+      setFeedback({
+        type: "error",
+        message: error.message || "No fue posible cargar las sesiones láser.",
+      });
     } finally {
       setLoading(false);
     }
@@ -101,30 +113,30 @@ export default function LaserPage() {
     {
       title: "Sesiones hoy",
       value: sessions.filter((session) => isSameDay(session.session_date)).length,
-      description: "Sesiones registradas durante la jornada actual.",
+      description: "Actividad registrada en la jornada actual.",
       icon: Sparkles,
-      accent: { background: "#FCEEE5", color: "#B76A4D" },
+      accent: { background: "#EEF5F1", color: BRANDING.colors.primaryStrong },
     },
     {
-      title: "Sesiones últimos 7 días",
+      title: "Últimos 7 días",
       value: sessions.filter((session) => withinLastDays(session.session_date, 7)).length,
-      description: "Seguimiento acumulado de la última semana.",
+      description: "Seguimiento acumulado de la semana clínica.",
       icon: FlameKindling,
-      accent: { background: "#F3EAF8", color: "#915AA6" },
+      accent: { background: "#F4EEE6", color: "#9A774A" },
     },
     {
       title: "Pacientes tratados",
       value: uniquePatients,
       description: "Pacientes únicos con al menos una sesión registrada.",
       icon: Users,
-      accent: { background: "#EAF6ED", color: "#28704B" },
+      accent: { background: "#EEF3F8", color: "#496985" },
     },
     {
-      title: "Especialista con más sesiones",
+      title: "Mayor actividad",
       value: topSpecialistEntry ? topSpecialistEntry[0] : "—",
       description: topSpecialistEntry ? `${topSpecialistEntry[1]} sesiones registradas.` : "Todavía no hay sesiones acumuladas.",
       icon: Stethoscope,
-      accent: { background: "#FBE7EE", color: "#AB496B" },
+      accent: { background: "#F5ECEF", color: "#93506A" },
     },
   ];
 
@@ -136,10 +148,18 @@ export default function LaserPage() {
       await createLaserSession(payload);
       await loadLaserData();
       setShowCreateModal(false);
-      setFeedback({ type: "success", message: "Sesión láser registrada correctamente." });
+      setFeedback({
+        type: "success",
+        message: payload.client_package_id
+          ? "Sesión registrada y descontada del paquete."
+          : "Sesión láser registrada correctamente.",
+      });
     } catch (error) {
       console.error("Error creating laser session", error);
-      setFeedback({ type: "error", message: error.message || "No fue posible registrar la sesión láser." });
+      setFeedback({
+        type: "error",
+        message: error.message || "No fue posible registrar la sesión láser.",
+      });
     } finally {
       setSaving(false);
     }
@@ -158,7 +178,10 @@ export default function LaserPage() {
       setFeedback({ type: "success", message: "Sesión láser actualizada correctamente." });
     } catch (error) {
       console.error("Error updating laser session", error);
-      setFeedback({ type: "error", message: error.message || "No fue posible actualizar la sesión láser." });
+      setFeedback({
+        type: "error",
+        message: error.message || "No fue posible actualizar la sesión láser.",
+      });
     } finally {
       setSaving(false);
     }
@@ -167,20 +190,19 @@ export default function LaserPage() {
   return (
     <AppLayout>
       <div style={styles.page}>
-        <div style={styles.header}>
-          <div>
-            <h1 style={styles.title}>Láser</h1>
-            <p style={styles.subtitle}>Registro de parámetros por zona, sesiones y observaciones clínicas</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowCreateModal(true)}
-            style={styles.primaryButton}
-            disabled={!lookups.clients.length}
-          >
-            + Nueva sesión láser
-          </button>
-        </div>
+        <PageHeader
+          eyebrow="Seguimiento técnico"
+          title="Láser"
+          subtitle="Registro de parámetros por zona, paquete utilizado y observaciones clínicas de cada sesión."
+          actions={(
+            <ActionButton
+              onClick={() => setShowCreateModal(true)}
+              disabled={!lookups.clients.length}
+            >
+              + Registrar sesión
+            </ActionButton>
+          )}
+        />
 
         <div style={styles.metricsGrid}>
           {summaryCards.map((card) => (
@@ -188,8 +210,11 @@ export default function LaserPage() {
           ))}
         </div>
 
-        <SectionCard title="Sesiones registradas" subtitle="Consulta, filtra y administra el seguimiento técnico de las sesiones láser.">
-          <div style={styles.toolbar}>
+        <SectionCard
+          title="Sesiones registradas"
+          subtitle="Consulta el historial técnico, filtra por fecha o especialista y abre cada sesión sin perder contexto clínico."
+        >
+          <FilterToolbar>
             <SearchInput
               value={search}
               onChange={setSearch}
@@ -197,15 +222,33 @@ export default function LaserPage() {
             />
 
             <div style={styles.filterGroup}>
-              <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} style={styles.filterInput} />
-              <select value={selectedSpecialist} onChange={(event) => { if (!isSpecialist) setSelectedSpecialist(event.target.value); }} disabled={isSpecialist} style={{ ...styles.filterInput, ...(isSpecialist ? styles.filterInputDisabled : {}) }}>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
+                style={styles.filterInput}
+              />
+              <select
+                value={selectedSpecialist}
+                onChange={(event) => {
+                  if (!isSpecialist) setSelectedSpecialist(event.target.value);
+                }}
+                disabled={isSpecialist}
+                style={{
+                  ...styles.filterInput,
+                  minWidth: 240,
+                  ...(isSpecialist ? styles.filterInputDisabled : {}),
+                }}
+              >
                 <option value="">Todas las especialistas</option>
                 {lookups.specialists.map((specialist) => (
-                  <option key={specialist.id} value={specialist.id}>{specialist.full_name}</option>
+                  <option key={specialist.id} value={specialist.id}>
+                    {specialist.full_name}
+                  </option>
                 ))}
               </select>
             </div>
-          </div>
+          </FilterToolbar>
 
           {feedback.message ? (
             <div style={feedback.type === "error" ? styles.errorBanner : styles.successBanner}>
@@ -213,13 +256,13 @@ export default function LaserPage() {
             </div>
           ) : null}
 
-          <div style={{ marginTop: 18 }}>
+          <div style={styles.contentWrap}>
             {loading ? (
               <div style={styles.loadingCopy}>Cargando sesiones láser...</div>
             ) : lookups.clients.length === 0 ? (
               <EmptyState
                 title="Primero debes registrar un paciente antes de crear una sesión láser."
-                description="Una vez que existan pacientes en el sistema, podrás registrar sus parámetros de depilación láser."
+                description="Una vez que existan pacientes en el sistema, podrás registrar sus parámetros y dejar trazabilidad técnica por zona."
               />
             ) : (
               <LaserSessionsTable
@@ -229,11 +272,11 @@ export default function LaserPage() {
                 emptyState={(
                   <EmptyState
                     title="No hay sesiones láser registradas todavía."
-                    description="Comienza registrando la primera sesión para llevar trazabilidad completa por zona y parámetros."
+                    description="Comienza registrando la primera sesión para documentar zonas tratadas, parámetros y progreso por paciente."
                     action={(
-                      <button type="button" onClick={() => setShowCreateModal(true)} style={styles.primaryButton}>
+                      <ActionButton onClick={() => setShowCreateModal(true)}>
                         Registrar primera sesión
-                      </button>
+                      </ActionButton>
                     )}
                   />
                 )}
@@ -246,7 +289,7 @@ export default function LaserPage() {
       {showCreateModal ? (
         <LaserSessionModal
           title="Nueva sesión láser"
-          subtitle="Registra la sesión, las zonas tratadas y los parámetros técnicos correspondientes."
+          subtitle="Registra paciente, paquete activo, zonas tratadas y parámetros técnicos correspondientes."
           onClose={() => setShowCreateModal(false)}
           wide
         >
@@ -256,7 +299,10 @@ export default function LaserPage() {
             onCancel={() => setShowCreateModal(false)}
             submitLabel="Guardar sesión"
             loading={saving}
-            initialValues={{ session_date: new Date().toISOString().split("T")[0], specialist_id: isSpecialist ? profile?.specialist_id || "" : "" }}
+            initialValues={{
+              session_date: new Date().toISOString().split("T")[0],
+              specialist_id: isSpecialist ? profile?.specialist_id || "" : "",
+            }}
             specialistLocked={isSpecialist}
           />
         </LaserSessionModal>
@@ -301,86 +347,58 @@ const styles = {
     flexDirection: "column",
     gap: 24,
   },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 16,
-    flexWrap: "wrap",
-  },
-  title: {
-    color: "#241F1D",
-    fontSize: 34,
-    fontWeight: 700,
-    margin: 0,
-  },
-  subtitle: {
-    color: "#8B7E74",
-    fontSize: 15,
-    margin: "8px 0 0",
-    lineHeight: 1.6,
-  },
-  primaryButton: {
-    background: "linear-gradient(135deg, #C38A63, #A85A66)",
-    color: "#fff",
-    border: "none",
-    borderRadius: 16,
-    padding: "14px 18px",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
   metricsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: 16,
   },
-  toolbar: {
-    display: "flex",
-    gap: 12,
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
   filterGroup: {
     display: "flex",
-    gap: 12,
+    alignItems: "center",
+    gap: 10,
     flexWrap: "wrap",
+    marginLeft: "auto",
   },
   filterInput: {
-    minWidth: 220,
-    background: "#FCFAF7",
-    border: "1px solid #E7DACE",
-    borderRadius: 14,
-    padding: "14px 15px",
-    color: "#2A2522",
+    minHeight: 46,
+    borderRadius: 16,
+    border: `1px solid ${BRANDING.colors.border}`,
+    background: BRANDING.colors.card,
+    padding: "0 14px",
+    color: BRANDING.colors.text,
     fontSize: 14,
+    outline: "none",
   },
   filterInputDisabled: {
-    background: "#F1EFEA",
-    color: "#7A716A",
+    background: "#F1EEE8",
+    color: BRANDING.colors.textMuted,
   },
-  loadingCopy: {
-    color: "#8A7B72",
+  successBanner: {
+    marginTop: 16,
+    background: "#EAF6ED",
+    border: "1px solid #CFE8D8",
+    color: "#28704B",
+    borderRadius: 18,
+    padding: "14px 16px",
     fontSize: 14,
-    padding: "8px 0",
+    fontWeight: 600,
   },
   errorBanner: {
+    marginTop: 16,
     background: "rgba(209, 109, 120, 0.1)",
     border: "1px solid rgba(209, 109, 120, 0.28)",
     color: "#A44E60",
-    borderRadius: 14,
-    padding: "12px 14px",
-    marginTop: 16,
-    fontSize: 13,
+    borderRadius: 18,
+    padding: "14px 16px",
+    fontSize: 14,
+    fontWeight: 600,
   },
-  successBanner: {
-    background: "rgba(95, 168, 123, 0.1)",
-    border: "1px solid rgba(95, 168, 123, 0.25)",
-    color: "#2F7A4A",
-    borderRadius: 14,
-    padding: "12px 14px",
-    marginTop: 16,
-    fontSize: 13,
+  contentWrap: {
+    marginTop: 18,
+  },
+  loadingCopy: {
+    color: BRANDING.colors.textMuted,
+    fontSize: 14,
+    padding: "6px 0",
   },
 };

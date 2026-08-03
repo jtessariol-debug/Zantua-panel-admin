@@ -1,4 +1,6 @@
-import { supabase } from "../lib/supabaseClient";
+﻿import { supabase } from "../lib/supabaseClient";
+import { fetchPackagesByInvoice, upsertClientPackageFromInvoiceItem } from "./clientPackages";
+import { fetchServiceOffers, mergeServicesWithOffers } from "./serviceOffers";
 
 function safeNumber(value) {
   const parsed = Number(value || 0);
@@ -38,6 +40,134 @@ function sanitizeCommissionPayload(payload) {
 
 function mapById(items, labelKey) {
   return new Map((items || []).map((item) => [item.id, item[labelKey] || "—"]));
+}
+
+function assertAdminProfile(profile) {
+  if (profile && !["admin", "owner"].includes(profile.role)) {
+    throw new Error("No tienes permisos para acceder a esta sección.");
+  }
+}
+
+async function enrichServicesWithOffers(services) {
+  const baseServices = services || [];
+
+  if (!baseServices.length) {
+    return [];
+  }
+
+  try {
+    const offers = await fetchServiceOffers({
+      activeOnly: true,
+      currentOnly: true,
+      serviceIds: baseServices.map((service) => service.id),
+    });
+
+    return mergeServicesWithOffers(baseServices, offers, {
+      activeOnly: true,
+      currentOnly: true,
+    });
+  } catch (error) {
+    console.error("Error loading active offers for billing", error);
+    return baseServices;
+  }
+}
+
+function hydrateInvoices(invoices, items, lookups) {
+  const clientMap = new Map((lookups.clients || []).map((client) => [client.id, client]));
+  const specialistMap = mapById(lookups.specialists, "full_name");
+  const productMap = mapById(lookups.products, "name");
+  const serviceMap = mapById(lookups.services, "name");
+
+  return (invoices || []).map((invoice) => {
+    const client = clientMap.get(invoice.client_id) || null;
+    const invoiceItems = (items || [])
+      .filter((item) => item.invoice_id === invoice.id)
+      .map((item) => ({
+        ...item,
+        product_name: productMap.get(item.product_id) || null,
+        service_name: serviceMap.get(item.service_id) || null,
+      }));
+
+    return {
+      ...invoice,
+      clientLabel: client?.full_name || "Cliente",
+      client,
+      specialistLabel: specialistMap.get(invoice.specialist_id) || "Sin especialista",
+      items: invoiceItems,
+    };
+  });
+}
+
+async function syncInvoicePackages({ invoice, invoiceItems, previousPackages = [] }) {
+  const serviceIds = Array.from(new Set(
+    (invoiceItems || [])
+      .filter((item) => item.service_id)
+      .map((item) => item.service_id)
+  ));
+
+  if (!serviceIds.length || !invoice.client_id) {
+    return [];
+  }
+
+  const { data: services, error: servicesError } = await supabase
+    .from("services")
+    .select("id, name, service_type, sessions_count")
+    .in("id", serviceIds);
+
+  if (servicesError) {
+    console.error("Error loading services for package sync", servicesError);
+    throw new Error("No fue posible sincronizar los paquetes comprados.");
+  }
+
+  const packageServicesMap = new Map(
+    (services || [])
+      .filter((service) => service.service_type === "paquete" && safeNumber(service.sessions_count) > 0)
+      .map((service) => [service.id, service])
+  );
+
+  const packageItems = (invoiceItems || []).filter((item) => packageServicesMap.has(item.service_id));
+
+  if (!packageItems.length) {
+    return [];
+  }
+
+  const previousPackagesByService = previousPackages.reduce((acc, item) => {
+    const key = item.service_id || "unknown";
+    acc[key] = acc[key] || [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+
+  const consumedPackageIds = new Set();
+  const results = [];
+
+  for (const item of packageItems) {
+    const service = packageServicesMap.get(item.service_id);
+    const candidates = previousPackagesByService[item.service_id] || [];
+    const directMatch = candidates.find((candidate) => candidate.invoice_item_id === item.id);
+    const fallbackMatch = candidates.find((candidate) => !consumedPackageIds.has(candidate.id));
+    const existingPackage = directMatch || fallbackMatch || null;
+
+    if (existingPackage?.id) {
+      consumedPackageIds.add(existingPackage.id);
+    }
+
+    const synced = await upsertClientPackageFromInvoiceItem({
+      existingPackage,
+      clientId: invoice.client_id,
+      service,
+      invoiceId: invoice.id,
+      invoiceItemId: item.id,
+      invoiceDate: invoice.invoice_date,
+      notes: item.description || null,
+    });
+
+    if (synced) {
+      results.push(synced);
+    }
+  }
+
+  return results;
 }
 
 export async function fetchInventoryData() {
@@ -180,14 +310,18 @@ export async function registerStockMovement({ itemType, itemId, movementType, qu
 
 export async function fetchBillingLookups({ specialistId = null } = {}) {
   const [clientsResponse, specialistsResponse, appointmentsResponse, servicesResponse, productsResponse] = await Promise.all([
-    supabase.from("clients").select("id, full_name").order("full_name", { ascending: true }),
+    supabase.from("clients").select("id, full_name, phone, email, national_id").order("full_name", { ascending: true }),
     (specialistId
       ? supabase.from("specialists").select("id, full_name").eq("id", specialistId).order("full_name", { ascending: true })
       : supabase.from("specialists").select("id, full_name").order("full_name", { ascending: true })),
     (specialistId
       ? supabase.from("appointments").select("id, appointment_date, start_time").eq("specialist_id", specialistId).order("appointment_date", { ascending: false }).limit(200)
       : supabase.from("appointments").select("id, appointment_date, start_time").order("appointment_date", { ascending: false }).limit(200)),
-    supabase.from("services").select("id, name, price").order("name", { ascending: true }),
+    supabase
+      .from("services")
+      .select("id, name, price, service_type, sessions_count, payment_flexibility, description, active")
+      .eq("active", true)
+      .order("name", { ascending: true }),
     supabase.from("products").select("id, name, price, current_stock, active").order("name", { ascending: true }),
   ]);
 
@@ -197,6 +331,8 @@ export async function fetchBillingLookups({ specialistId = null } = {}) {
     throw new Error("No fue posible cargar la información de facturación.");
   }
 
+  const enrichedServices = await enrichServicesWithOffers(servicesResponse.data || []);
+
   return {
     clients: clientsResponse.data || [],
     specialists: specialistsResponse.data || [],
@@ -204,7 +340,7 @@ export async function fetchBillingLookups({ specialistId = null } = {}) {
       ...appointment,
       label: `${appointment.appointment_date || ""} ${appointment.start_time?.slice(0, 5) || ""}`.trim(),
     })),
-    services: servicesResponse.data || [],
+    services: enrichedServices,
     products: productsResponse.data || [],
   };
 }
@@ -230,28 +366,46 @@ export async function fetchInvoices({ specialistId = null } = {}) {
     throw new Error("No fue posible cargar los items de facturación.");
   }
 
-  const clientMap = mapById(lookups.clients, "full_name");
-  const specialistMap = mapById(lookups.specialists, "full_name");
-  const productMap = mapById(lookups.products, "name");
-  const serviceMap = mapById(lookups.services, "name");
+  return {
+    invoices: hydrateInvoices(invoicesResponse.data || [], itemsResponse.data || [], lookups),
+    lookups,
+  };
+}
 
-  const items = itemsResponse.data || [];
-  const invoices = (invoicesResponse.data || []).map((invoice) => {
-    const invoiceItems = items.filter((item) => item.invoice_id === invoice.id).map((item) => ({
-      ...item,
-      product_name: productMap.get(item.product_id) || null,
-      service_name: serviceMap.get(item.service_id) || null,
-    }));
+export async function fetchInvoicesByClient(clientId) {
+  const [invoicesResponse, lookups] = await Promise.all([
+    supabase
+      .from("invoices")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false }),
+    fetchBillingLookups(),
+  ]);
 
-    return {
-      ...invoice,
-      clientLabel: clientMap.get(invoice.client_id) || "Cliente",
-      specialistLabel: specialistMap.get(invoice.specialist_id) || "Sin especialista",
-      items: invoiceItems,
-    };
-  });
+  if (invoicesResponse.error) {
+    console.error("Error loading invoices by client", invoicesResponse.error);
+    throw new Error("No fue posible cargar la facturación vinculada.");
+  }
 
-  return { invoices, lookups };
+  const invoiceIds = (invoicesResponse.data || []).map((invoice) => invoice.id);
+  let invoiceItems = [];
+
+  if (invoiceIds.length > 0) {
+    const { data, error } = await supabase
+      .from("invoice_items")
+      .select("*")
+      .in("invoice_id", invoiceIds)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Error loading invoice items by client", error);
+      throw new Error("No fue posible cargar los items de facturación del paciente.");
+    }
+
+    invoiceItems = data || [];
+  }
+
+  return hydrateInvoices(invoicesResponse.data || [], invoiceItems, lookups);
 }
 
 export async function createInvoice(payload) {
@@ -343,6 +497,12 @@ export async function createInvoice(payload) {
     throw new Error("La factura fue creada, pero falló el registro de los items.");
   }
 
+  await syncInvoicePackages({
+    invoice,
+    invoiceItems: insertedItems || [],
+    previousPackages: [],
+  });
+
   for (const item of normalizedItems.filter((entry) => entry.item_type === "producto")) {
     const product = productsById.get(item.product_id);
     const nextStock = safeNumber(product.current_stock) - item.quantity;
@@ -426,6 +586,8 @@ export async function updateInvoice(invoiceId, payload) {
     console.error("Error loading previous invoice items", previousItemsError);
     throw new Error("No fue posible preparar la actualización de la factura.");
   }
+
+  const previousPackages = await fetchPackagesByInvoice(invoiceId);
 
   const allProductIds = Array.from(new Set([
     ...normalizedItems
@@ -535,6 +697,12 @@ export async function updateInvoice(invoiceId, payload) {
     throw new Error("No fue posible guardar los items actualizados.");
   }
 
+  await syncInvoicePackages({
+    invoice: updatedInvoice,
+    invoiceItems: insertedItems || [],
+    previousPackages,
+  });
+
   for (const [productId, delta] of stockDeltaByProduct.entries()) {
     const product = productsById.get(productId);
     const nextStock = safeNumber(product.current_stock) + safeNumber(delta);
@@ -625,7 +793,8 @@ export async function fetchCommissions({ specialistId = null } = {}) {
   }));
 }
 
-export async function createCommission(payload) {
+export async function createCommission(payload, profile = null) {
+  assertAdminProfile(profile);
   const normalizedPayload = sanitizeCommissionPayload(payload);
   const saleAmount = safeNumber(normalizedPayload.sale_amount);
   const percentage = safeNumber(normalizedPayload.commission_percentage);
@@ -652,7 +821,8 @@ export async function createCommission(payload) {
   return data;
 }
 
-export async function updateCommission(commissionId, payload) {
+export async function updateCommission(commissionId, payload, profile = null) {
+  assertAdminProfile(profile);
   const normalizedPayload = sanitizeCommissionPayload(payload);
   const saleAmount = safeNumber(normalizedPayload.sale_amount);
   const percentage = safeNumber(normalizedPayload.commission_percentage);
@@ -680,11 +850,12 @@ export async function updateCommission(commissionId, payload) {
   return data;
 }
 
-export async function markCommissionAsPaid(commissionId) {
+export async function markCommissionAsPaid(commissionId, profile = null) {
+  assertAdminProfile(profile);
   return updateCommission(commissionId, {
     status: "pagada",
     paid_at: new Date().toISOString(),
-  });
+  }, profile);
 }
 
 export async function fetchFinanceDashboardMetrics({ specialistId = null } = {}) {
@@ -746,3 +917,10 @@ export async function fetchFinanceDashboardMetrics({ specialistId = null } = {})
     };
   }
 }
+
+
+
+
+
+
+

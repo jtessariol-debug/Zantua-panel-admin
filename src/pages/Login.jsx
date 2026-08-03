@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import BrandMark from "../components/ui/BrandMark";
 import { useAuth } from "../hooks/useAuth";
 import { BRANDING } from "../lib/branding";
+
+const BRANDING_PREVIEW_SUBTITLE = "Acceso al panel clínico";
 
 export default function Login() {
   const { login } = useAuth();
@@ -30,8 +32,10 @@ export default function Login() {
     } catch (err) {
       if (err?.code === "profile/not-found") {
         setError("La cuenta aún no ha sido inicializada.");
+      } else if (err?.friendlyMessage) {
+        setError(err.friendlyMessage);
       } else {
-        setError(err?.message || "No fue posible iniciar sesión.");
+        setError("No fue posible iniciar sesión.");
       }
     } finally {
       setLoading(false);
@@ -65,7 +69,7 @@ export default function Login() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             style={styles.input}
-            placeholder="••••••••"
+            placeholder="********"
             required
           />
 
@@ -134,4 +138,3 @@ const styles = {
   },
 };
 
-const BRANDING_PREVIEW_SUBTITLE = "Acceso al panel clínico";

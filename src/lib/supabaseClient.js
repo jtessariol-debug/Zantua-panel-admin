@@ -1,14 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+console.log("Supabase URL configured:", Boolean(supabaseUrl));
+console.log("Supabase anon key configured:", Boolean(supabaseAnonKey));
 
 if (!supabaseUrl) {
-  throw new Error("Missing environment variable: NEXT_PUBLIC_SUPABASE_URL or REACT_APP_SUPABASE_URL");
+  throw new Error("Faltan variables de configuración de Supabase");
 }
 
 if (!supabaseAnonKey) {
-  throw new Error("Missing environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY or REACT_APP_SUPABASE_ANON_KEY");
+  throw new Error("Faltan variables de configuración de Supabase");
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

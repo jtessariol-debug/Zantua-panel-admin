@@ -1,4 +1,6 @@
+import ActionButton from "../ui/ActionButton";
 import StatusBadge from "../ui/StatusBadge";
+import { BRANDING } from "../../lib/branding";
 
 export default function InvoicesTable({ invoices, emptyState, onView, onEdit, onMarkPaid, onCancel }) {
   if (!invoices.length) return emptyState;
@@ -21,19 +23,19 @@ export default function InvoicesTable({ invoices, emptyState, onView, onEdit, on
         <tbody>
           {invoices.map((invoice) => (
             <tr key={invoice.id} style={styles.row}>
-              <td style={styles.cell}>{invoice.invoice_number || invoice.id}</td>
+              <td style={styles.cellStrong}>{invoice.invoice_number || invoice.id}</td>
               <td style={styles.cell}>{formatDate(invoice.invoice_date || invoice.created_at)}</td>
               <td style={styles.cell}>{invoice.clientLabel}</td>
               <td style={styles.cell}>{invoice.specialistLabel}</td>
-              <td style={styles.cell}>${Number(invoice.total || 0).toFixed(2)}</td>
+              <td style={styles.cellAmount}>RD${Number(invoice.total || 0).toFixed(2)}</td>
               <td style={styles.cell}>{invoice.payment_method || "—"}</td>
               <td style={styles.cell}><StatusBadge status={invoice.payment_status || invoice.status || "pendiente"} /></td>
               <td style={styles.cell}>
                 <div style={styles.actions}>
-                  <button type="button" onClick={() => onView(invoice)} style={styles.actionButton}>Ver</button>
-                  <button type="button" onClick={() => onEdit(invoice)} style={styles.actionButtonPrimary}>Editar</button>
-                  <button type="button" onClick={() => onMarkPaid(invoice)} style={styles.actionButton}>Marcar pagada</button>
-                  <button type="button" onClick={() => onCancel(invoice)} style={styles.cancelButton}>Cancelar</button>
+                  <ActionButton onClick={() => onView(invoice)} variant="secondary" style={styles.actionCompact}>Ver</ActionButton>
+                  <ActionButton onClick={() => onEdit(invoice)} variant="ghost" style={styles.actionCompact}>Editar</ActionButton>
+                  <ActionButton onClick={() => onMarkPaid(invoice)} variant="success" style={styles.actionCompact}>Marcar pagada</ActionButton>
+                  <ActionButton onClick={() => onCancel(invoice)} variant="danger" style={styles.actionCompact}>Cancelar</ActionButton>
                 </div>
               </td>
             </tr>
@@ -46,17 +48,17 @@ export default function InvoicesTable({ invoices, emptyState, onView, onEdit, on
 
 function formatDate(value) {
   if (!value) return "—";
-  try { return new Date(value).toLocaleDateString(); } catch { return "—"; }
+  try { return new Date(value).toLocaleDateString("es-DO"); } catch { return "—"; }
 }
 
 const styles = {
   wrap: { overflowX: "auto" },
-  table: { width: "100%", borderCollapse: "collapse", minWidth: 980 },
-  head: { textAlign: "left", color: "#8A7B72", fontSize: 12, textTransform: "uppercase", padding: "0 0 14px", borderBottom: "1px solid #F0E8E1", fontWeight: 700 },
+  table: { width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 980 },
+  head: { textAlign: "left", color: BRANDING.colors.textMuted, fontSize: 12, textTransform: "uppercase", padding: "0 14px 14px 0", borderBottom: "1px solid #EEE4D8", fontWeight: 700, letterSpacing: 0.35 },
   row: { borderBottom: "1px solid #F5EFE9" },
-  cell: { padding: "16px 0", color: "#2A2522", fontSize: 14, verticalAlign: "middle" },
+  cell: { padding: "18px 14px 18px 0", color: BRANDING.colors.text, fontSize: 14, verticalAlign: "middle", borderBottom: "1px solid #F5EFE9" },
+  cellStrong: { padding: "18px 14px 18px 0", color: BRANDING.colors.primaryStrong, fontSize: 14, fontWeight: 700, verticalAlign: "middle", borderBottom: "1px solid #F5EFE9" },
+  cellAmount: { padding: "18px 14px 18px 0", color: BRANDING.colors.primaryStrong, fontSize: 14, fontWeight: 700, verticalAlign: "middle", borderBottom: "1px solid #F5EFE9", whiteSpace: "nowrap" },
   actions: { display: "flex", gap: 8, flexWrap: "wrap" },
-  actionButton: { background: "#fff", color: "#6E564A", border: "1px solid #E6D8CC", borderRadius: 12, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
-  actionButtonPrimary: { background: "#F7ECE6", color: "#A15A58", border: "1px solid #EBCFC6", borderRadius: 12, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
-  cancelButton: { background: "#FFF4F5", color: "#A24F5D", border: "1px solid #F3D6DB", borderRadius: 12, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
+  actionCompact: { padding: "9px 12px", borderRadius: 14, fontSize: 12 },
 };

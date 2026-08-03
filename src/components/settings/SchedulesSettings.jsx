@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import ActionButton from "../ui/ActionButton";
+import EmptyState from "../ui/EmptyState";
 import SectionCard from "../ui/SectionCard";
 import { BRANDING } from "../../lib/branding";
 import PreparedNotice from "./PreparedNotice";
@@ -31,7 +33,10 @@ export default function SchedulesSettings({
   return (
     <div style={styles.stack}>
       <SectionCard title="Horarios generales" subtitle="Parámetros operativos del centro y capacidad base de agenda.">
-        {!persistenceAvailable ? <PreparedNotice /> : null}
+        {!persistenceAvailable ? (
+          <PreparedNotice message="Las reglas generales no están disponibles para guardado persistente en este momento." />
+        ) : null}
+
         <form onSubmit={handleRulesSubmit} style={styles.rulesGrid}>
           <Field label="Apertura">
             <input type="time" value={form.center_open || ""} onChange={(event) => setForm((current) => ({ ...current, center_open: event.target.value }))} style={styles.input} />
@@ -49,24 +54,31 @@ export default function SchedulesSettings({
             <input type="number" min="1" value={form.max_patients_per_specialist || 9} onChange={(event) => setForm((current) => ({ ...current, max_patients_per_specialist: event.target.value }))} style={styles.input} />
           </Field>
           <div style={styles.rulesAction}>
-            <button type="submit" style={styles.primaryButton} disabled={savingRules}>
+            <ActionButton type="submit" disabled={savingRules}>
               {savingRules ? "Guardando..." : "Guardar reglas"}
-            </button>
+            </ActionButton>
           </div>
         </form>
       </SectionCard>
 
-      <SectionCard title="Horarios por especialista" subtitle="Edita disponibilidad, agenda abierta y estado operativo de cada especialista.">
-        <div style={styles.specialistList}>
-          {specialists.map((specialist) => (
-            <SpecialistCard
-              key={specialist.id}
-              specialist={specialist}
-              saving={savingSpecialistId === specialist.id}
-              onSave={onSaveSpecialist}
-            />
-          ))}
-        </div>
+      <SectionCard title="Horarios por especialista" subtitle="Disponibilidad real consumida por Agenda y Láser.">
+        {!specialists.length ? (
+          <EmptyState
+            title="No hay especialistas operativas visibles."
+            description="Cuando existan especialistas activas en Supabase, aparecerán aquí para administrar sus horarios."
+          />
+        ) : (
+          <div style={styles.specialistList}>
+            {specialists.map((specialist) => (
+              <SpecialistCard
+                key={specialist.id}
+                specialist={specialist}
+                saving={savingSpecialistId === specialist.id}
+                onSave={onSaveSpecialist}
+              />
+            ))}
+          </div>
+        )}
       </SectionCard>
     </div>
   );
@@ -105,7 +117,10 @@ function SpecialistCard({ specialist, onSave, saving }) {
   return (
     <form onSubmit={handleSubmit} style={styles.specialistCard}>
       <div style={styles.specialistHeader}>
-        <div style={styles.specialistName}>{specialist.full_name}</div>
+        <div>
+          <div style={styles.specialistName}>{specialist.full_name}</div>
+          <div style={styles.specialistMeta}>{form.has_open_schedule ? "Agenda abierta" : "Horario definido"}</div>
+        </div>
         <label style={styles.toggleRow}>
           <input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} />
           Activa
@@ -127,9 +142,9 @@ function SpecialistCard({ specialist, onSave, saving }) {
       </label>
 
       <div style={styles.specialistAction}>
-        <button type="submit" style={styles.secondaryButton} disabled={saving}>
+        <ActionButton type="submit" variant="secondary" disabled={saving}>
           {saving ? "Guardando..." : "Guardar especialista"}
-        </button>
+        </ActionButton>
       </div>
     </form>
   );
@@ -146,94 +161,16 @@ function Field({ label, children }) {
 
 const styles = {
   stack: { display: "flex", flexDirection: "column", gap: 16 },
-  rulesGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 16,
-  },
-  rulesAction: {
-    gridColumn: "1 / -1",
-    display: "flex",
-    justifyContent: "flex-end",
-  },
-  specialistList: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 16,
-  },
-  specialistCard: {
-    background: "#FCFAF4",
-    border: `1px solid ${BRANDING.colors.border}`,
-    borderRadius: 20,
-    padding: 18,
-    display: "flex",
-    flexDirection: "column",
-    gap: 14,
-  },
-  specialistHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  specialistName: {
-    color: BRANDING.colors.primaryStrong,
-    fontSize: 16,
-    fontWeight: 700,
-  },
-  specialistFields: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 12,
-  },
-  toggleRow: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    color: BRANDING.colors.textMuted,
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  specialistAction: {
-    display: "flex",
-    justifyContent: "flex-end",
-  },
-  fieldLabel: {
-    color: BRANDING.colors.textMuted,
-    fontSize: 12,
-    textTransform: "uppercase",
-    fontWeight: 700,
-    marginBottom: 6,
-  },
-  input: {
-    width: "100%",
-    boxSizing: "border-box",
-    background: "#FCFAF7",
-    border: `1px solid ${BRANDING.colors.border}`,
-    borderRadius: 14,
-    padding: "14px 15px",
-    color: BRANDING.colors.text,
-    fontSize: 14,
-    outline: "none",
-  },
-  primaryButton: {
-    background: `linear-gradient(135deg, ${BRANDING.colors.primary}, ${BRANDING.colors.secondary})`,
-    color: BRANDING.colors.white,
-    border: "none",
-    borderRadius: 16,
-    padding: "14px 18px",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  secondaryButton: {
-    background: "#F1F6F3",
-    color: BRANDING.colors.primaryStrong,
-    border: "1px solid #D4E4DD",
-    borderRadius: 16,
-    padding: "12px 16px",
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
+  rulesGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 },
+  rulesAction: { gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" },
+  specialistList: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 },
+  specialistCard: { background: "#FCFAF4", border: `1px solid ${BRANDING.colors.border}`, borderRadius: 20, padding: 18, display: "flex", flexDirection: "column", gap: 14 },
+  specialistHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  specialistName: { color: BRANDING.colors.primaryStrong, fontSize: 16, fontWeight: 700 },
+  specialistMeta: { color: BRANDING.colors.textMuted, fontSize: 12, marginTop: 4 },
+  specialistFields: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
+  toggleRow: { display: "inline-flex", alignItems: "center", gap: 8, color: BRANDING.colors.textMuted, fontSize: 13, fontWeight: 600 },
+  specialistAction: { display: "flex", justifyContent: "flex-end" },
+  fieldLabel: { color: BRANDING.colors.textMuted, fontSize: 12, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 },
+  input: { width: "100%", boxSizing: "border-box", background: "#FCFAF7", border: `1px solid ${BRANDING.colors.border}`, borderRadius: 14, padding: "14px 15px", color: BRANDING.colors.text, fontSize: 14, outline: "none" },
 };

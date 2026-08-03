@@ -1,17 +1,17 @@
 const STATUS_STYLES = {
-  pendiente: { background: "#FFF5D8", color: "#8B6A08" },
-  confirmada: { background: "#E4F2EA", color: "#1E5A49" },
-  confirmed: { background: "#E4F2EA", color: "#1E5A49" },
-  completada: { background: "#E8EFF7", color: "#295B84" },
-  completed: { background: "#E8EFF7", color: "#295B84" },
-  pagada: { background: "#E4F2EA", color: "#1E5A49" },
-  paid: { background: "#E4F2EA", color: "#1E5A49" },
-  cancelada: { background: "#FBE5E8", color: "#A83A4B" },
-  cancelled: { background: "#FBE5E8", color: "#A83A4B" },
-  canceled: { background: "#FBE5E8", color: "#A83A4B" },
-  no_asistio: { background: "#ECECF1", color: "#5E6270" },
-  no_show: { background: "#ECECF1", color: "#5E6270" },
-  otro: { background: "#F3EAF8", color: "#7A4B92" },
+  pendiente: { background: "#FBF0D3", color: "#8B6A08", borderColor: "#E9D59B" },
+  confirmada: { background: "#E9F4EE", color: "#1E5A49", borderColor: "#CCE1D7" },
+  confirmed: { background: "#E9F4EE", color: "#1E5A49", borderColor: "#CCE1D7" },
+  completada: { background: "#EAF0F8", color: "#295B84", borderColor: "#D0DCEE" },
+  completed: { background: "#EAF0F8", color: "#295B84", borderColor: "#D0DCEE" },
+  pagada: { background: "#E9F4EE", color: "#1E5A49", borderColor: "#CCE1D7" },
+  paid: { background: "#E9F4EE", color: "#1E5A49", borderColor: "#CCE1D7" },
+  cancelada: { background: "#FBEBED", color: "#A83A4B", borderColor: "#E9C8D0" },
+  cancelled: { background: "#FBEBED", color: "#A83A4B", borderColor: "#E9C8D0" },
+  canceled: { background: "#FBEBED", color: "#A83A4B", borderColor: "#E9C8D0" },
+  no_asistio: { background: "#F0EFEE", color: "#5E6270", borderColor: "#DFDCD9" },
+  no_show: { background: "#F0EFEE", color: "#5E6270", borderColor: "#DFDCD9" },
+  otro: { background: "#F3EAF8", color: "#7A4B92", borderColor: "#E2D4EA" },
 };
 
 function humanizeStatus(status) {
@@ -31,7 +31,7 @@ function humanizeStatus(status) {
       return "Cancelada";
     case "no_show":
     case "no_asistio":
-      return "No asistio";
+      return "No asistió";
     case "otro":
       return "Otro";
     case "pendiente":
@@ -57,6 +57,7 @@ export default function StatusBadge({ status }) {
         letterSpacing: 0,
         background: style.background,
         color: style.color,
+        border: `1px solid ${style.borderColor}`,
         whiteSpace: "nowrap",
       }}
     >

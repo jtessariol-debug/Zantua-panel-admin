@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarRange, Receipt, Wallet, WalletCards } from "lucide-react";
 import AppLayout from "../components/layout/AppLayout";
-import DashboardCard from "../components/ui/DashboardCard";
-import EmptyState from "../components/ui/EmptyState";
-import SectionCard from "../components/ui/SectionCard";
 import InvoiceDetail from "../components/billing/InvoiceDetail";
 import InvoiceForm from "../components/billing/InvoiceForm";
 import InvoiceModal from "../components/billing/InvoiceModal";
 import InvoicesTable from "../components/billing/InvoicesTable";
+import ActionButton from "../components/ui/ActionButton";
+import DashboardCard from "../components/ui/DashboardCard";
+import EmptyState from "../components/ui/EmptyState";
+import PageHeader from "../components/ui/PageHeader";
+import SectionCard from "../components/ui/SectionCard";
 import { useAuth } from "../hooks/useAuth";
+import { BRANDING } from "../lib/branding";
 import { createInvoice, fetchInvoices, updateInvoice } from "../services/finance";
 
 export default function BillingPage() {
@@ -48,31 +51,29 @@ export default function BillingPage() {
     startOfWeek.setDate(now.getDate() - 6);
     startOfWeek.setHours(0, 0, 0, 0);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
     const toDate = (invoice) => new Date(invoice.invoice_date || invoice.created_at || 0);
     const paidInvoices = invoices.filter((invoice) => invoice.payment_status === "pagada");
     const todayTotal = paidInvoices.filter((invoice) => toDate(invoice) >= startOfDay).reduce((acc, invoice) => acc + Number(invoice.total || 0), 0);
     const weekTotal = paidInvoices.filter((invoice) => toDate(invoice) >= startOfWeek).reduce((acc, invoice) => acc + Number(invoice.total || 0), 0);
     const monthTotal = paidInvoices.filter((invoice) => toDate(invoice) >= startOfMonth).reduce((acc, invoice) => acc + Number(invoice.total || 0), 0);
-
     return [
       {
         title: "Facturado hoy",
-        value: `$${todayTotal.toFixed(2)}`,
+        value: `RD$${todayTotal.toFixed(2)}`,
         description: "Ingresos cobrados en la jornada actual.",
         icon: Wallet,
         accent: { background: "#EAF6ED", color: "#28704B" },
       },
       {
         title: "Facturado esta semana",
-        value: `$${weekTotal.toFixed(2)}`,
+        value: `RD$${weekTotal.toFixed(2)}`,
         description: "Ventas pagadas acumuladas en los últimos 7 días.",
         icon: CalendarRange,
         accent: { background: "#F3EAF8", color: "#915AA6" },
       },
       {
         title: "Facturado este mes",
-        value: `$${monthTotal.toFixed(2)}`,
+        value: `RD$${monthTotal.toFixed(2)}`,
         description: "Resumen mensual de ingresos registrados.",
         icon: WalletCards,
         accent: { background: "#FCEEE5", color: "#B76A4D" },
@@ -130,11 +131,7 @@ export default function BillingPage() {
     setSaving(true);
     setError("");
     try {
-      await updateInvoice(invoice.id, {
-        ...invoice,
-        items: invoice.items || [],
-        payment_status: "pagada",
-      });
+      await updateInvoice(invoice.id, { ...invoice, items: invoice.items || [], payment_status: "pagada" });
       setFeedback("Factura marcada como pagada.");
       await loadBilling();
     } catch (submitError) {
@@ -149,11 +146,7 @@ export default function BillingPage() {
     setSaving(true);
     setError("");
     try {
-      await updateInvoice(invoice.id, {
-        ...invoice,
-        items: invoice.items || [],
-        payment_status: "cancelada",
-      });
+      await updateInvoice(invoice.id, { ...invoice, items: invoice.items || [], payment_status: "cancelada" });
       setFeedback("Factura cancelada.");
       await loadBilling();
     } catch (submitError) {
@@ -167,15 +160,12 @@ export default function BillingPage() {
   return (
     <AppLayout>
       <div style={styles.page}>
-        <div style={styles.header}>
-          <div>
-            <h1 style={styles.title}>Facturación</h1>
-            <p style={styles.subtitle}>Control de ventas, servicios, productos y comprobantes del centro.</p>
-          </div>
-          <button type="button" onClick={() => setModalState({ mode: "create" })} style={styles.primaryButton}>
-            + Nueva factura
-          </button>
-        </div>
+        <PageHeader
+          eyebrow="Finanzas"
+          title="Facturación"
+          subtitle="Control de ventas, servicios, productos y comprobantes con una lectura más ejecutiva y clara."
+          actions={<ActionButton onClick={() => setModalState({ mode: "create" })}>Nueva factura</ActionButton>}
+        />
 
         <div style={styles.metricsGrid}>
           {metrics.map((metric) => <DashboardCard key={metric.title} {...metric} />)}
@@ -198,11 +188,7 @@ export default function BillingPage() {
                 <EmptyState
                   title="No hay facturas registradas todavía."
                   description="Crea la primera factura para comenzar el control de ventas y cobros."
-                  action={(
-                    <button type="button" onClick={() => setModalState({ mode: "create" })} style={styles.primaryButton}>
-                      Crear primera factura
-                    </button>
-                  )}
+                  action={<ActionButton onClick={() => setModalState({ mode: "create" })}>Crear primera factura</ActionButton>}
                 />
               )}
             />
@@ -210,12 +196,7 @@ export default function BillingPage() {
         </SectionCard>
 
         {modalState?.mode === "create" ? (
-          <InvoiceModal
-            title="Nueva factura"
-            subtitle="Registra servicios y productos vendidos con su forma de pago."
-            onClose={() => setModalState(null)}
-            wide
-          >
+          <InvoiceModal title="Nueva factura" subtitle="Registra servicios y productos vendidos con su forma de pago." onClose={() => setModalState(null)} wide>
             <InvoiceForm
               lookups={lookups}
               onSubmit={handleCreateInvoice}
@@ -229,12 +210,7 @@ export default function BillingPage() {
         ) : null}
 
         {modalState?.mode === "edit" ? (
-          <InvoiceModal
-            title="Editar factura"
-            subtitle={modalState.invoice?.invoice_number || "Actualiza datos e items de la factura."}
-            onClose={() => setModalState(null)}
-            wide
-          >
+          <InvoiceModal title="Editar factura" subtitle={modalState.invoice?.invoice_number || "Actualiza datos e items de la factura."} onClose={() => setModalState(null)} wide>
             <InvoiceForm
               lookups={lookups}
               initialValues={modalState.invoice}
@@ -248,12 +224,7 @@ export default function BillingPage() {
         ) : null}
 
         {modalState?.mode === "view" ? (
-          <InvoiceModal
-            title="Detalle de factura"
-            subtitle={modalState.invoice?.invoice_number || "Resumen del comprobante"}
-            onClose={() => setModalState(null)}
-            wide
-          >
+          <InvoiceModal title="Detalle de factura" subtitle={modalState.invoice?.invoice_number || "Resumen del comprobante"} onClose={() => setModalState(null)} wide>
             <InvoiceDetail invoice={modalState.invoice} />
           </InvoiceModal>
         ) : null}
@@ -264,12 +235,8 @@ export default function BillingPage() {
 
 const styles = {
   page: { display: "flex", flexDirection: "column", gap: 24 },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 18, flexWrap: "wrap" },
-  title: { color: "#241F1D", fontSize: 34, fontWeight: 700, margin: 0 },
-  subtitle: { color: "#8B7E74", fontSize: 15, lineHeight: 1.6, margin: "8px 0 0" },
   metricsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 },
-  loadingCopy: { color: "#8A7B72", fontSize: 14, padding: "6px 0" },
+  loadingCopy: { color: BRANDING.colors.textMuted, fontSize: 14, padding: "6px 0" },
   successBanner: { background: "#EAF6ED", border: "1px solid #CFE8D8", color: "#28704B", borderRadius: 16, padding: "14px 16px", fontSize: 14, fontWeight: 600 },
   errorBanner: { background: "rgba(209, 109, 120, 0.1)", border: "1px solid rgba(209, 109, 120, 0.28)", color: "#A44E60", borderRadius: 16, padding: "14px 16px", fontSize: 14, fontWeight: 600 },
-  primaryButton: { background: "linear-gradient(135deg, #C38A63, #A85A66)", color: "#fff", border: "none", borderRadius: 16, padding: "14px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer" },
 };

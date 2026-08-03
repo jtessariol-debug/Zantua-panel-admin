@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabaseClient";
+﻿import { supabase } from "../lib/supabaseClient";
 
 function normalizeProfile(profile) {
   return {
@@ -31,16 +31,17 @@ export async function fetchUserProfiles() {
     throw new Error("No fue posible cargar las especialistas vinculables.");
   }
 
-  console.log("USERS PROFILES RAW:", profilesResponse.data);
-  console.log("USERS PROFILES COUNT:", profilesResponse.data?.length || 0);
-
   return {
     profiles: (profilesResponse.data || []).map((profile) => normalizeProfile(profile)),
-    specialists: specialistsResponse.data || [],
+    specialists: (specialistsResponse.data || []).filter((specialist) => specialist.active !== false),
   };
 }
 
-export async function updateUserProfile(userId, payload) {
+export async function updateUserProfile(userId, payload, currentProfile = null) {
+  if (currentProfile?.role !== "admin") {
+    throw new Error("No tienes permisos para actualizar usuarios.");
+  }
+
   const { data, error } = await supabase
     .from("profiles")
     .update({
@@ -60,3 +61,39 @@ export async function updateUserProfile(userId, payload) {
 
   return data;
 }
+
+export async function createUserAccount(payload, currentProfile) {
+  if (currentProfile?.role !== "admin") {
+    throw new Error("No tienes permisos para crear usuarios.");
+  }
+
+  const { data, error } = await supabase.functions.invoke("create-user", {
+    body: {
+      full_name: payload.full_name,
+      email: payload.email,
+      password: payload.password,
+      role: payload.role,
+      specialist_id: payload.specialist_id || null,
+      active: payload.active !== false,
+    },
+  });
+
+  if (error) {
+    console.error("Error invoking create-user function", error);
+    if (
+      error.message?.includes("404")
+      || error.message?.includes("FunctionsHttpError")
+      || error.message?.includes("Failed to send a request")
+    ) {
+      throw new Error("La creación automática de usuarios requiere que la Edge Function `create-user` esté desplegada y activa.");
+    }
+    throw new Error(error.message || "No fue posible crear el usuario.");
+  }
+
+  if (data?.error) {
+    throw new Error(data.error);
+  }
+
+  return data?.user || null;
+}
+

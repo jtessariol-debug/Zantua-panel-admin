@@ -1,4 +1,5 @@
-import { supabase } from "../lib/supabaseClient";
+﻿import { supabase } from "../lib/supabaseClient";
+import { applyPackageConsumption, fetchPackageById } from "./clientPackages";
 
 export const LASER_ZONES = [
   "Rostro",
@@ -27,6 +28,7 @@ function formatSessionRecord(session, lookups, parameters) {
     clientLabel: lookups.clientMap.get(session.client_id) || "Paciente",
     specialistLabel: lookups.specialistMap.get(session.specialist_id) || "Especialista",
     appointmentLabel: lookups.appointmentMap.get(session.appointment_id) || null,
+    clientPackageLabel: lookups.packageMap.get(session.client_package_id) || null,
     general_notes: session.general_notes || "",
     parameters: sessionParameters,
     zonesSummary: sessionParameters.map((parameter) => parameter.zone).filter(Boolean).join(", "),
@@ -67,23 +69,27 @@ export async function fetchLaserSessions({ specialistId = null } = {}) {
   const sessionsQuery = specialistId
     ? supabase
       .from("laser_sessions")
-      .select("id, client_id, specialist_id, appointment_id, session_date, general_notes, created_at, updated_at")
+      .select("id, client_id, specialist_id, appointment_id, client_package_id, session_date, general_notes, created_at, updated_at")
       .eq("specialist_id", specialistId)
       .order("session_date", { ascending: false })
       .order("created_at", { ascending: false })
     : supabase
       .from("laser_sessions")
-      .select("id, client_id, specialist_id, appointment_id, session_date, general_notes, created_at, updated_at")
+      .select("id, client_id, specialist_id, appointment_id, client_package_id, session_date, general_notes, created_at, updated_at")
       .order("session_date", { ascending: false })
       .order("created_at", { ascending: false });
 
-  const [sessionsResponse, parametersResponse, lookups] = await Promise.all([
+  const [sessionsResponse, parametersResponse, lookups, packagesResponse] = await Promise.all([
     sessionsQuery,
     supabase
       .from("laser_session_parameters")
       .select("id, laser_session_id, zone, subzone, frequency_hz, intensity_j, pulse_width, pulse_count, notes, created_at")
       .order("created_at", { ascending: true }),
     fetchLaserLookups({ specialistId }),
+    supabase
+      .from("client_service_packages")
+      .select("id, services(name)")
+      .order("created_at", { ascending: false }),
   ]);
 
   if (sessionsResponse.error) {
@@ -96,10 +102,16 @@ export async function fetchLaserSessions({ specialistId = null } = {}) {
     throw new Error("No fue posible cargar los parámetros de las sesiones láser.");
   }
 
+  if (packagesResponse.error) {
+    console.error("Error loading client packages for laser sessions", packagesResponse.error);
+    throw new Error("No fue posible cargar los paquetes asociados a las sesiones láser.");
+  }
+
   const lookupMaps = {
     clientMap: mapById(lookups.clients, "full_name"),
     specialistMap: mapById(lookups.specialists, "full_name"),
     appointmentMap: new Map(lookups.appointments.map((appointment) => [appointment.id, appointment.label])),
+    packageMap: new Map((packagesResponse.data || []).map((item) => [item.id, item.services?.name || "Paquete"])),
   };
 
   return {
@@ -109,10 +121,10 @@ export async function fetchLaserSessions({ specialistId = null } = {}) {
 }
 
 export async function fetchLaserSessionsByClient(clientId) {
-  const [sessionsResponse, parametersResponse, lookups] = await Promise.all([
+  const [sessionsResponse, parametersResponse, lookups, packagesResponse] = await Promise.all([
     supabase
       .from("laser_sessions")
-      .select("id, client_id, specialist_id, appointment_id, session_date, general_notes, created_at, updated_at")
+      .select("id, client_id, specialist_id, appointment_id, client_package_id, session_date, general_notes, created_at, updated_at")
       .eq("client_id", clientId)
       .order("session_date", { ascending: false })
       .order("created_at", { ascending: false }),
@@ -121,6 +133,11 @@ export async function fetchLaserSessionsByClient(clientId) {
       .select("id, laser_session_id, zone, subzone, frequency_hz, intensity_j, pulse_width, pulse_count, notes, created_at")
       .order("created_at", { ascending: true }),
     fetchLaserLookups(),
+    supabase
+      .from("client_service_packages")
+      .select("id, services(name)")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false }),
   ]);
 
   if (sessionsResponse.error) {
@@ -133,26 +150,56 @@ export async function fetchLaserSessionsByClient(clientId) {
     throw new Error("No fue posible cargar los parámetros láser del paciente.");
   }
 
+  if (packagesResponse.error) {
+    console.error("Error loading client packages by client", packagesResponse.error);
+    throw new Error("No fue posible cargar los paquetes del paciente.");
+  }
+
   const lookupMaps = {
     clientMap: mapById(lookups.clients, "full_name"),
     specialistMap: mapById(lookups.specialists, "full_name"),
     appointmentMap: new Map(lookups.appointments.map((appointment) => [appointment.id, appointment.label])),
+    packageMap: new Map((packagesResponse.data || []).map((item) => [item.id, item.services?.name || "Paquete"])),
   };
 
   return (sessionsResponse.data || []).map((session) => formatSessionRecord(session, lookupMaps, parametersResponse.data || []));
 }
 
 export async function createLaserSession(payload) {
-  const { parameters, ...sessionPayload } = payload;
+  const { parameters, client_package_id, ...sessionPayload } = payload;
+
+  if (client_package_id) {
+    const selectedPackage = await fetchPackageById(client_package_id);
+
+    if (selectedPackage.client_id !== sessionPayload.client_id) {
+      throw new Error("El paquete seleccionado no pertenece a este paciente.");
+    }
+
+    if (selectedPackage.status !== "activo" || selectedPackage.remaining_sessions <= 0) {
+      throw new Error("No hay sesiones disponibles en el paquete seleccionado.");
+    }
+
+    await applyPackageConsumption(client_package_id, 1);
+  }
 
   const { data: session, error: sessionError } = await supabase
     .from("laser_sessions")
-    .insert(sessionPayload)
-    .select("id, client_id, specialist_id, appointment_id, session_date, general_notes, created_at, updated_at")
+    .insert({
+      ...sessionPayload,
+      client_package_id: client_package_id || null,
+    })
+    .select("id, client_id, specialist_id, appointment_id, client_package_id, session_date, general_notes, created_at, updated_at")
     .single();
 
   if (sessionError) {
     console.error("Error creating laser session", sessionError);
+    if (client_package_id) {
+      try {
+        await applyPackageConsumption(client_package_id, -1);
+      } catch (rollbackError) {
+        console.error("Error rolling back package consumption after session create failure", rollbackError);
+      }
+    }
     throw new Error("No fue posible registrar la sesión láser.");
   }
 
@@ -173,6 +220,17 @@ export async function createLaserSession(payload) {
 
   if (parametersError) {
     console.error("Error creating laser session parameters", parametersError);
+    if (client_package_id) {
+      try {
+        await applyPackageConsumption(client_package_id, -1);
+        await supabase
+          .from("laser_sessions")
+          .update({ client_package_id: null })
+          .eq("id", session.id);
+      } catch (rollbackError) {
+        console.error("Error rolling back package consumption after parameter failure", rollbackError);
+      }
+    }
     throw new Error("La sesión fue creada, pero falló el registro de parámetros por zona.");
   }
 
@@ -180,17 +238,81 @@ export async function createLaserSession(payload) {
 }
 
 export async function updateLaserSession(sessionId, payload) {
-  const { parameters, ...sessionPayload } = payload;
+  const { data: currentSession, error: currentSessionError } = await supabase
+    .from("laser_sessions")
+    .select("id, client_id, client_package_id")
+    .eq("id", sessionId)
+    .single();
+
+  if (currentSessionError) {
+    console.error("Error loading current laser session", currentSessionError);
+    throw new Error("No fue posible preparar la actualización de la sesión láser.");
+  }
+
+  const { parameters, client_package_id, ...sessionPayload } = payload;
+  const previousPackageId = currentSession.client_package_id || null;
+  const nextPackageId = client_package_id || null;
+
+  if (previousPackageId !== nextPackageId) {
+    if (previousPackageId) {
+      await applyPackageConsumption(previousPackageId, -1);
+    }
+
+    if (nextPackageId) {
+      try {
+        const nextPackage = await fetchPackageById(nextPackageId);
+
+        if (nextPackage.client_id !== sessionPayload.client_id) {
+          throw new Error("El paquete seleccionado no pertenece a este paciente.");
+        }
+
+        if (nextPackage.status !== "activo" || nextPackage.remaining_sessions <= 0) {
+          throw new Error("No hay sesiones disponibles en el paquete seleccionado.");
+        }
+
+        await applyPackageConsumption(nextPackageId, 1);
+      } catch (error) {
+        if (previousPackageId) {
+          try {
+            await applyPackageConsumption(previousPackageId, 1);
+          } catch (rollbackError) {
+            console.error("Error restoring previous package after package switch failure", rollbackError);
+          }
+        }
+        throw error;
+      }
+    }
+  }
 
   const { data: session, error: sessionError } = await supabase
     .from("laser_sessions")
-    .update(sessionPayload)
+    .update({
+      ...sessionPayload,
+      client_package_id: nextPackageId,
+    })
     .eq("id", sessionId)
-    .select("id, client_id, specialist_id, appointment_id, session_date, general_notes, created_at, updated_at")
+    .select("id, client_id, specialist_id, appointment_id, client_package_id, session_date, general_notes, created_at, updated_at")
     .single();
 
   if (sessionError) {
     console.error("Error updating laser session", sessionError);
+    if (previousPackageId !== nextPackageId) {
+      if (nextPackageId) {
+        try {
+          await applyPackageConsumption(nextPackageId, -1);
+        } catch (rollbackError) {
+          console.error("Error rolling back new package after session update failure", rollbackError);
+        }
+      }
+
+      if (previousPackageId) {
+        try {
+          await applyPackageConsumption(previousPackageId, 1);
+        } catch (rollbackError) {
+          console.error("Error restoring previous package after session update failure", rollbackError);
+        }
+      }
+    }
     throw new Error("No fue posible actualizar la sesión láser.");
   }
 
@@ -226,3 +348,4 @@ export async function updateLaserSession(sessionId, payload) {
 
   return session;
 }
+

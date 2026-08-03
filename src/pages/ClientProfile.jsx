@@ -1,13 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, FilePenLine, FileSignature, NotebookTabs, ReceiptText, Waves } from "lucide-react";
+﻿import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  FilePenLine,
+  FileSignature,
+  NotebookTabs,
+  ReceiptText,
+  Waves,
+} from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
-import AppLayout from "../components/layout/AppLayout";
-import ConsentDocumentView from "../components/clinical/ConsentDocumentView";
 import ClinicalHistoryForm from "../components/clinical/ClinicalHistoryForm";
 import ClinicalHistoryView from "../components/clinical/ClinicalHistoryView";
+import ConsentDocumentView from "../components/clinical/ConsentDocumentView";
 import InformedConsentForm from "../components/clinical/InformedConsentForm";
 import InformedConsentView from "../components/clinical/InformedConsentView";
+import AppLayout from "../components/layout/AppLayout";
 import LaserSessionDetail from "../components/laser/LaserSessionDetail";
+import ClientPackagesCard from "../components/patients/ClientPackagesCard";
 import PatientModal from "../components/patients/PatientModal";
 import EmptyState from "../components/ui/EmptyState";
 import SectionCard from "../components/ui/SectionCard";
@@ -18,13 +27,16 @@ import {
   fetchInformedConsents,
   upsertClinicalHistory,
 } from "../services/clinical";
-import { fetchInvoices } from "../services/finance";
+import { fetchAppointmentsByClient } from "../services/appointments";
+import { fetchClientPackagesByClient } from "../services/clientPackages";
+import { fetchInvoicesByClient } from "../services/finance";
 import { fetchLaserSessionsByClient } from "../services/laser";
 import { fetchPatientById } from "../services/patients";
 import { exportConsentPDF } from "../utils/exportPDF";
 
 const TABS = [
   { key: "overview", label: "Información general", icon: NotebookTabs },
+  { key: "appointments", label: "Historial de citas", icon: CalendarClock },
   { key: "clinical", label: "Historial clínico", icon: FilePenLine },
   { key: "consent", label: "Consentimiento informado", icon: FileSignature },
   { key: "laser", label: "Sesiones láser", icon: Waves },
@@ -36,9 +48,11 @@ export default function ClientProfile() {
   const navigate = useNavigate();
 
   const [patient, setPatient] = useState(null);
+  const [appointments, setAppointments] = useState([]);
   const [clinicalHistory, setClinicalHistory] = useState(null);
   const [consents, setConsents] = useState([]);
   const [laserSessions, setLaserSessions] = useState([]);
+  const [clientPackages, setClientPackages] = useState([]);
   const [billingItems, setBillingItems] = useState([]);
   const [consentLookups, setConsentLookups] = useState({ specialists: [], services: [] });
   const [activeTab, setActiveTab] = useState("overview");
@@ -46,6 +60,12 @@ export default function ClientProfile() {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
   const [error, setError] = useState("");
+  const [sectionErrors, setSectionErrors] = useState({
+    appointments: "",
+    clinical: "",
+    laser: "",
+    billing: "",
+  });
   const [clinicalModalOpen, setClinicalModalOpen] = useState(false);
   const [consentModalOpen, setConsentModalOpen] = useState(false);
   const [selectedLaserSession, setSelectedLaserSession] = useState(null);
@@ -54,29 +74,109 @@ export default function ClientProfile() {
   async function loadPatientProfile() {
     setLoading(true);
     setError("");
+    setSectionErrors({
+      appointments: "",
+      clinical: "",
+      laser: "",
+      billing: "",
+    });
 
     try {
-      const [patientResult, clinicalResult, consentResults, laserResult, consentLookupResult, invoicesResult] = await Promise.all([
-        fetchPatientById(id),
-        fetchClinicalHistory(id),
-        fetchInformedConsents(id),
-        fetchLaserSessionsByClient(id),
-        fetchConsentLookups(),
-        fetchInvoices(),
-      ]);
-
+      const patientResult = await fetchPatientById(id);
       setPatient(patientResult);
-      setClinicalHistory(clinicalResult);
-      setConsents(consentResults);
-      setLaserSessions(laserResult);
-      setConsentLookups(consentLookupResult);
-      setBillingItems((invoicesResult?.invoices || []).filter((invoice) => invoice.client_id === id));
     } catch (loadError) {
       console.error(loadError);
       setError(loadError.message || "No fue posible cargar este paciente.");
-    } finally {
       setLoading(false);
+      return;
     }
+
+    const results = await Promise.allSettled([
+      fetchAppointmentsByClient(id),
+      fetchClinicalHistory(id),
+      fetchInformedConsents(id),
+      fetchLaserSessionsByClient(id),
+      fetchConsentLookups(),
+      fetchInvoicesByClient(id),
+      fetchClientPackagesByClient(id, { activeOnly: true }),
+    ]);
+
+    const [
+      appointmentsResult,
+      clinicalResult,
+      consentResults,
+      laserResult,
+      consentLookupResult,
+      invoicesResult,
+      packagesResult,
+    ] = results;
+
+    if (appointmentsResult.status === "fulfilled") {
+      setAppointments(appointmentsResult.value);
+    } else {
+      setAppointments([]);
+      setSectionErrors((current) => ({
+        ...current,
+        appointments: "No se pudo cargar el historial de citas.",
+      }));
+      console.error(appointmentsResult.reason);
+    }
+
+    if (clinicalResult.status === "fulfilled") {
+      setClinicalHistory(clinicalResult.value);
+    } else {
+      setClinicalHistory(null);
+      setSectionErrors((current) => ({
+        ...current,
+        clinical: "No se pudo cargar el historial clínico.",
+      }));
+      console.error(clinicalResult.reason);
+    }
+
+    if (consentResults.status === "fulfilled") {
+      setConsents(consentResults.value);
+    } else {
+      setConsents([]);
+      console.error(consentResults.reason);
+    }
+
+    if (laserResult.status === "fulfilled") {
+      setLaserSessions(laserResult.value);
+    } else {
+      setLaserSessions([]);
+      setSectionErrors((current) => ({
+        ...current,
+        laser: "No se pudieron cargar las sesiones láser.",
+      }));
+      console.error(laserResult.reason);
+    }
+
+    if (consentLookupResult.status === "fulfilled") {
+      setConsentLookups(consentLookupResult.value);
+    } else {
+      setConsentLookups({ specialists: [], services: [] });
+      console.error(consentLookupResult.reason);
+    }
+
+    if (invoicesResult.status === "fulfilled") {
+      setBillingItems(invoicesResult.value || []);
+    } else {
+      setBillingItems([]);
+      setSectionErrors((current) => ({
+        ...current,
+        billing: "No se pudo cargar la facturación vinculada.",
+      }));
+      console.error(invoicesResult.reason);
+    }
+
+    if (packagesResult.status === "fulfilled") {
+      setClientPackages(packagesResult.value);
+    } else {
+      setClientPackages([]);
+      console.error(packagesResult.reason);
+    }
+
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -85,11 +185,15 @@ export default function ClientProfile() {
 
   const latestConsent = consents[0] || null;
 
-  const patientStats = useMemo(() => ([
-    { label: "Sesiones láser", value: laserSessions.length },
-    { label: "Historial clínico", value: clinicalHistory ? "Completo" : "Pendiente" },
-    { label: "Consentimiento", value: latestConsent ? "Firmado" : "Sin firmar" },
-  ]), [laserSessions.length, clinicalHistory, latestConsent]);
+  const patientStats = useMemo(
+    () => [
+      { label: "Citas registradas", value: appointments.length },
+      { label: "Sesiones láser", value: laserSessions.length },
+      { label: "Historial clínico", value: clinicalHistory ? "Completo" : "Pendiente" },
+      { label: "Consentimiento", value: latestConsent ? "Firmado" : "Sin firmar" },
+    ],
+    [appointments.length, laserSessions.length, clinicalHistory, latestConsent],
+  );
 
   async function handleClinicalSave(payload) {
     setSaving(true);
@@ -100,9 +204,13 @@ export default function ClientProfile() {
       setClinicalHistory(saved);
       setClinicalModalOpen(false);
       setFeedback({ type: "success", message: "Historial clínico guardado correctamente." });
+      setSectionErrors((current) => ({ ...current, clinical: "" }));
     } catch (submitError) {
       console.error(submitError);
-      setFeedback({ type: "error", message: submitError.message || "No fue posible guardar el historial clínico." });
+      setFeedback({
+        type: "error",
+        message: submitError.message || "No fue posible guardar el historial clínico.",
+      });
     } finally {
       setSaving(false);
     }
@@ -119,7 +227,10 @@ export default function ClientProfile() {
       setFeedback({ type: "success", message: "Consentimiento informado guardado correctamente." });
     } catch (submitError) {
       console.error(submitError);
-      setFeedback({ type: "error", message: submitError.message || "No fue posible guardar el consentimiento informado." });
+      setFeedback({
+        type: "error",
+        message: submitError.message || "No fue posible guardar el consentimiento informado.",
+      });
     } finally {
       setSaving(false);
     }
@@ -207,32 +318,88 @@ export default function ClientProfile() {
         </div>
 
         {activeTab === "overview" ? (
-          <div style={styles.grid}>
-            <SectionCard title="Datos de contacto" subtitle="Información principal y de localización del paciente.">
-              <DetailRows
-                rows={[
-                  ["Nombre", patient.full_name],
-                  ["Teléfono", patient.phone || "No registrado"],
-                  ["Correo", patient.email || "No registrado"],
-                  ["Cédula", patient.national_id || "No registrada"],
-                  ["Nacimiento", patient.birth_date || "No registrada"],
-                  ["Dirección", patient.address || "No registrada"],
-                ]}
-              />
-            </SectionCard>
+          <div style={styles.overviewStack}>
+            <div style={styles.grid}>
+              <SectionCard
+                title="Datos de contacto"
+                subtitle="Información principal y de localización del paciente."
+              >
+                <DetailRows
+                  rows={[
+                    ["Nombre", patient.full_name],
+                    ["Teléfono", patient.phone || "No registrado"],
+                    ["Correo", patient.email || "No registrado"],
+                    ["Cédula", patient.national_id || "No registrada"],
+                    ["Nacimiento", formatDate(patient.birth_date)],
+                    ["Dirección", patient.address || "No registrada"],
+                  ]}
+                />
+              </SectionCard>
 
-            <SectionCard title="Notas generales" subtitle="Observaciones capturadas en el registro base del paciente.">
-              <div style={styles.longCopy}>{patient.notes || "Sin notas generales registradas."}</div>
-            </SectionCard>
+              <SectionCard
+                title="Notas generales"
+                subtitle="Observaciones capturadas en el registro base del paciente."
+              >
+                <div style={styles.longCopy}>{patient.notes || "Sin notas generales registradas."}</div>
+              </SectionCard>
+            </div>
+
+            <ClientPackagesCard packages={clientPackages} />
           </div>
         ) : null}
 
+        {activeTab === "appointments" ? (
+          <SectionCard
+            title="Historial de citas"
+            subtitle="Seguimiento cronológico de citas, servicios y cabinas asignadas."
+          >
+            {sectionErrors.appointments ? (
+              <div style={styles.inlineError}>{sectionErrors.appointments}</div>
+            ) : null}
+
+            {!sectionErrors.appointments && appointments.length === 0 ? (
+              <EmptyState
+                title="No hay citas registradas para este paciente."
+                description="Cuando se creen citas desde Agenda, aparecerán aquí con su estado y detalles."
+              />
+            ) : null}
+
+            {!sectionErrors.appointments && appointments.length > 0 ? (
+              <div style={styles.appointmentList}>
+                {appointments.map((appointment) => (
+                  <div key={appointment.id} style={styles.appointmentCard}>
+                    <div style={styles.appointmentTop}>
+                      <div>
+                        <div style={styles.appointmentDate}>
+                          {formatDate(appointment.appointment_date)} · {formatTimeRange(appointment.start_time, appointment.end_time)}
+                        </div>
+                        <div style={styles.appointmentMeta}>
+                          {appointment.specialistLabel} · {appointment.serviceLabel}
+                        </div>
+                      </div>
+                      <span style={getStatusBadgeStyle(appointment.status)}>{formatStatus(appointment.status)}</span>
+                    </div>
+                    <div style={styles.appointmentMetaGrid}>
+                      <InfoPill label="Cabina" value={appointment.cabinLabel || "Sin cabina"} />
+                      <InfoPill label="Tipo" value={appointment.serviceType === "paquete" ? "Paquete" : "Servicio"} />
+                    </div>
+                    {appointment.notes ? <div style={styles.appointmentNotes}>{appointment.notes}</div> : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </SectionCard>
+        ) : null}
+
         {activeTab === "clinical" ? (
-          <ClinicalHistoryView
-            history={clinicalHistory}
-            onCreate={() => setClinicalModalOpen(true)}
-            onEdit={() => setClinicalModalOpen(true)}
-          />
+          <>
+            {sectionErrors.clinical ? <div style={styles.inlineError}>{sectionErrors.clinical}</div> : null}
+            <ClinicalHistoryView
+              history={clinicalHistory}
+              onCreate={() => setClinicalModalOpen(true)}
+              onEdit={() => setClinicalModalOpen(true)}
+            />
+          </>
         ) : null}
 
         {activeTab === "consent" ? (
@@ -246,13 +413,29 @@ export default function ClientProfile() {
         ) : null}
 
         {activeTab === "laser" ? (
-          <SectionCard title="Historial de sesiones láser" subtitle="Sesiones registradas para este paciente, ordenadas de más reciente a más antigua.">
-            {laserSessions.length === 0 ? (
+          <SectionCard
+            title="Historial de sesiones láser"
+            subtitle="Sesiones registradas para este paciente, ordenadas de más reciente a más antigua."
+            action={(
+              <button
+                type="button"
+                onClick={() => navigate(`/laser?client_id=${patient.id}`)}
+                style={styles.secondaryButton}
+              >
+                Registrar sesión láser
+              </button>
+            )}
+          >
+            {sectionErrors.laser ? <div style={styles.inlineError}>{sectionErrors.laser}</div> : null}
+
+            {!sectionErrors.laser && laserSessions.length === 0 ? (
               <EmptyState
-                title="No hay sesiones láser registradas todavía."
+                title="No hay sesiones láser registradas para este paciente."
                 description="Cuando se registren sesiones desde el módulo Láser, aparecerán aquí con su especialista y parámetros."
               />
-            ) : (
+            ) : null}
+
+            {!sectionErrors.laser && laserSessions.length > 0 ? (
               <div style={styles.sessionList}>
                 {laserSessions.map((session) => (
                   <button
@@ -268,40 +451,51 @@ export default function ClientProfile() {
                       </div>
                       <div style={styles.sessionZoneBadge}>{session.zonesSummary || "Sin zonas"}</div>
                     </div>
-                    <div style={styles.sessionNotes}>{session.general_notes || "Sin observaciones generales registradas."}</div>
+                    {session.clientPackageLabel ? (
+                      <div style={styles.sessionPackage}>Paquete: {session.clientPackageLabel}</div>
+                    ) : null}
+                    <div style={styles.sessionNotes}>
+                      {session.general_notes || "Sin observaciones generales registradas."}
+                    </div>
                   </button>
                 ))}
               </div>
-            )}
+            ) : null}
           </SectionCard>
         ) : null}
 
         {activeTab === "billing" ? (
           <SectionCard title="Facturación" subtitle="Resumen de facturas relacionadas con este paciente.">
-            {billingItems.length === 0 ? (
+            {sectionErrors.billing ? <div style={styles.inlineError}>{sectionErrors.billing}</div> : null}
+
+            {!sectionErrors.billing && billingItems.length === 0 ? (
               <EmptyState
                 title="No hay facturación registrada todavía."
                 description="Cuando se creen facturas vinculadas a este paciente, aparecerán aquí para consulta rápida."
               />
-            ) : (
+            ) : null}
+
+            {!sectionErrors.billing && billingItems.length > 0 ? (
               <div style={styles.billingList}>
                 {billingItems.map((invoice) => (
                   <div key={invoice.id} style={styles.billingCard}>
                     <div style={styles.billingTop}>
                       <div>
                         <div style={styles.billingNumber}>{invoice.invoice_number || invoice.id}</div>
-                        <div style={styles.billingMeta}>{formatDate(invoice.invoice_date || invoice.created_at)} · {invoice.specialistLabel || "Sin especialista"}</div>
+                        <div style={styles.billingMeta}>
+                          {formatDate(invoice.invoice_date || invoice.created_at)} · {invoice.specialistLabel || "Sin especialista"}
+                        </div>
                       </div>
-                      <div style={styles.billingTotal}>${Number(invoice.total || 0).toFixed(2)}</div>
+                      <div style={styles.billingTotal}>RD${formatCurrency(invoice.total || 0)}</div>
                     </div>
                     <div style={styles.billingStatusRow}>
                       <span style={styles.billingMethod}>{invoice.payment_method || "Método no definido"}</span>
-                      <span style={styles.billingStatus}>{invoice.payment_status || "pendiente"}</span>
+                      <span style={styles.billingStatus}>{formatStatus(invoice.payment_status || "pendiente")}</span>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
+            ) : null}
           </SectionCard>
         ) : null}
       </div>
@@ -360,7 +554,11 @@ export default function ClientProfile() {
         >
           <ConsentDocumentView consent={selectedConsent} />
           <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}>
-            <button type="button" onClick={async () => exportConsentPDF(patient, selectedConsent)} style={styles.downloadButton}>
+            <button
+              type="button"
+              onClick={async () => exportConsentPDF(patient, selectedConsent)}
+              style={styles.secondaryButton}
+            >
               Descargar PDF
             </button>
           </div>
@@ -383,6 +581,15 @@ function DetailRows({ rows }) {
   );
 }
 
+function InfoPill({ label, value }) {
+  return (
+    <div style={styles.infoPill}>
+      <span style={styles.infoPillLabel}>{label}</span>
+      <span style={styles.infoPillValue}>{value}</span>
+    </div>
+  );
+}
+
 function formatDate(value) {
   if (!value) return "No registrada";
   try {
@@ -392,46 +599,201 @@ function formatDate(value) {
   }
 }
 
+function formatTimeRange(startTime, endTime) {
+  if (!startTime && !endTime) return "Hora no disponible";
+  const start = startTime ? startTime.slice(0, 5) : "--:--";
+  const end = endTime ? endTime.slice(0, 5) : "--:--";
+  return `${start} - ${end}`;
+}
+
+function formatStatus(value) {
+  const labels = {
+    pendiente: "Pendiente",
+    confirmada: "Confirmada",
+    completada: "Completada",
+    cancelada: "Cancelada",
+    no_asistio: "No asistió",
+    pagada: "Pagada",
+  };
+
+  return labels[value] || value || "Sin estado";
+}
+
+function formatCurrency(value) {
+  return Number(value || 0).toLocaleString("es-DO", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function getStatusBadgeStyle(status) {
+  const map = {
+    pendiente: { background: "#F8EFD0", color: "#8D6A14" },
+    confirmada: { background: "#E3F2E8", color: "#1E5A49" },
+    completada: { background: "#E2ECF8", color: "#315B96" },
+    cancelada: { background: "#F8E2E3", color: "#A34A52" },
+    no_asistio: { background: "#ECE8E4", color: "#6F6258" },
+    pagada: { background: "#E3F2E8", color: "#1E5A49" },
+  };
+
+  return {
+    ...styles.statusBadge,
+    ...(map[status] || map.pendiente),
+  };
+}
+
 const styles = {
   page: { display: "flex", flexDirection: "column", gap: 24 },
-  loadingWrap: { color: "#8A7B72", fontSize: 16, padding: 24 },
-  backButton: { alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 8, background: "#fff", color: "#6E564A", border: "1px solid #E6D8CC", borderRadius: 14, padding: "12px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer" },
-  hero: { background: "#FFFFFF", border: "1px solid #EFE5DC", borderRadius: 24, boxShadow: "0 18px 36px rgba(71, 47, 30, 0.05)", padding: 24, display: "grid", gridTemplateColumns: "1.3fr .7fr", gap: 20 },
+  loadingWrap: { color: "#6F6258", fontSize: 16, padding: 24 },
+  backButton: {
+    alignSelf: "flex-start",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    background: "#FFFDF8",
+    color: "#12382F",
+    border: "1px solid #E7DCCB",
+    borderRadius: 14,
+    padding: "12px 16px",
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  hero: {
+    background: "#FFFDF8",
+    border: "1px solid #E7DCCB",
+    borderRadius: 24,
+    boxShadow: "0 18px 36px rgba(18, 56, 47, 0.06)",
+    padding: 24,
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 20,
+  },
   heroIdentity: { display: "flex", gap: 18, alignItems: "center" },
-  avatar: { width: 72, height: 72, borderRadius: 22, background: "linear-gradient(135deg, #D9B08A, #C77B72)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 28, fontWeight: 700, flexShrink: 0 },
-  title: { color: "#241F1D", fontSize: 32, fontWeight: 700, margin: 0 },
-  subtitle: { color: "#8B7E74", fontSize: 15, lineHeight: 1.6, marginTop: 8 },
-  metaList: { display: "flex", gap: 14, flexWrap: "wrap", marginTop: 14, color: "#6E625B", fontSize: 14 },
-  statsGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 },
-  statCard: { background: "#FCFAF7", border: "1px solid #F0E6DD", borderRadius: 18, padding: 16 },
-  statLabel: { color: "#9C8E84", fontSize: 12, textTransform: "uppercase", fontWeight: 700 },
-  statValue: { color: "#261F1D", fontSize: 22, fontWeight: 700, marginTop: 8 },
-  successBanner: { background: "rgba(95, 168, 123, 0.1)", border: "1px solid rgba(95, 168, 123, 0.25)", color: "#2F7A4A", borderRadius: 14, padding: "12px 14px", fontSize: 13 },
-  errorBanner: { background: "rgba(209, 109, 120, 0.1)", border: "1px solid rgba(209, 109, 120, 0.28)", color: "#A44E60", borderRadius: 14, padding: "12px 14px", fontSize: 13 },
-  tabs: { display: "flex", gap: 8, flexWrap: "wrap", background: "#F5EFE8", borderRadius: 18, padding: 6 },
-  tabButton: { background: "transparent", border: "1px solid transparent", borderRadius: 14, padding: "12px 14px", color: "#7A6E67", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 },
-  tabButtonActive: { background: "#FFFFFF", borderColor: "#E8DBCF", color: "#A15A58", boxShadow: "0 8px 18px rgba(75, 52, 35, 0.06)" },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    background: "linear-gradient(135deg, #12382F, #1E5A49)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#fff",
+    fontSize: 28,
+    fontWeight: 700,
+    flexShrink: 0,
+  },
+  title: { color: "#1B1B1B", fontSize: 32, fontWeight: 700, margin: 0 },
+  subtitle: { color: "#6F6258", fontSize: 15, lineHeight: 1.6, marginTop: 8 },
+  metaList: { display: "flex", gap: 14, flexWrap: "wrap", marginTop: 14, color: "#6F6258", fontSize: 14 },
+  statsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12 },
+  statCard: { background: "#F8F3EA", border: "1px solid #E7DCCB", borderRadius: 18, padding: 16 },
+  statLabel: { color: "#6F6258", fontSize: 12, textTransform: "uppercase", fontWeight: 700 },
+  statValue: { color: "#12382F", fontSize: 22, fontWeight: 700, marginTop: 8 },
+  successBanner: {
+    background: "rgba(30, 90, 73, 0.08)",
+    border: "1px solid rgba(30, 90, 73, 0.18)",
+    color: "#1E5A49",
+    borderRadius: 14,
+    padding: "12px 14px",
+    fontSize: 13,
+  },
+  errorBanner: {
+    background: "rgba(194, 95, 102, 0.1)",
+    border: "1px solid rgba(194, 95, 102, 0.2)",
+    color: "#9B3F48",
+    borderRadius: 14,
+    padding: "12px 14px",
+    fontSize: 13,
+  },
+  inlineError: {
+    background: "#FCECEC",
+    border: "1px solid #F3D3D6",
+    color: "#9B3F48",
+    borderRadius: 14,
+    padding: "12px 14px",
+    fontSize: 13,
+    marginBottom: 16,
+  },
+  tabs: { display: "flex", gap: 8, flexWrap: "wrap", background: "#F8F3EA", borderRadius: 18, padding: 6 },
+  tabButton: {
+    background: "transparent",
+    border: "1px solid transparent",
+    borderRadius: 14,
+    padding: "12px 14px",
+    color: "#6F6258",
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  tabButtonActive: {
+    background: "#FFFDF8",
+    borderColor: "#D8CAB5",
+    color: "#12382F",
+    boxShadow: "0 8px 18px rgba(18, 56, 47, 0.05)",
+  },
+  overviewStack: { display: "flex", flexDirection: "column", gap: 16 },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 },
   detailRows: { display: "flex", flexDirection: "column", gap: 12 },
-  detailRow: { borderBottom: "1px solid #F3ECE6", paddingBottom: 10 },
-  detailLabel: { color: "#9C8E84", fontSize: 11, fontWeight: 700, textTransform: "uppercase" },
-  detailValue: { color: "#2A2522", fontSize: 15, marginTop: 6, lineHeight: 1.5 },
-  longCopy: { color: "#4A403B", fontSize: 14, lineHeight: 1.7, whiteSpace: "pre-wrap", minHeight: 120 },
+  detailRow: { borderBottom: "1px solid #F0E7DB", paddingBottom: 10 },
+  detailLabel: { color: "#6F6258", fontSize: 11, fontWeight: 700, textTransform: "uppercase" },
+  detailValue: { color: "#1B1B1B", fontSize: 15, marginTop: 6, lineHeight: 1.5 },
+  longCopy: { color: "#3E3935", fontSize: 14, lineHeight: 1.7, whiteSpace: "pre-wrap", minHeight: 120 },
+  appointmentList: { display: "flex", flexDirection: "column", gap: 12 },
+  appointmentCard: { background: "#FFFDF8", border: "1px solid #E7DCCB", borderRadius: 18, padding: 18 },
+  appointmentTop: { display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexWrap: "wrap" },
+  appointmentDate: { color: "#1B1B1B", fontSize: 16, fontWeight: 700 },
+  appointmentMeta: { color: "#6F6258", fontSize: 13, marginTop: 4 },
+  appointmentMetaGrid: { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 },
+  appointmentNotes: { color: "#4A403B", fontSize: 14, lineHeight: 1.6, marginTop: 14, whiteSpace: "pre-wrap" },
+  infoPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    background: "#F8F3EA",
+    border: "1px solid #E7DCCB",
+    borderRadius: 999,
+    padding: "8px 12px",
+  },
+  infoPillLabel: { color: "#6F6258", fontSize: 12, fontWeight: 700 },
+  infoPillValue: { color: "#12382F", fontSize: 12, fontWeight: 700 },
+  statusBadge: { borderRadius: 999, padding: "7px 12px", fontSize: 12, fontWeight: 700, display: "inline-flex" },
+  secondaryButton: {
+    background: "#12382F",
+    color: "#FFFDF8",
+    border: "none",
+    borderRadius: 14,
+    padding: "12px 16px",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
   sessionList: { display: "flex", flexDirection: "column", gap: 12 },
-  sessionCard: { background: "#FCFAF7", border: "1px solid #F0E6DD", borderRadius: 18, padding: 18, textAlign: "left", cursor: "pointer" },
+  sessionCard: {
+    background: "#FFFDF8",
+    border: "1px solid #E7DCCB",
+    borderRadius: 18,
+    padding: 18,
+    textAlign: "left",
+    cursor: "pointer",
+  },
   sessionTop: { display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexWrap: "wrap" },
-  sessionDate: { color: "#241F1D", fontSize: 16, fontWeight: 700 },
-  sessionSpecialist: { color: "#8B7E74", fontSize: 13, marginTop: 4 },
-  sessionZoneBadge: { background: "#F3EAF8", color: "#915AA6", borderRadius: 999, padding: "6px 10px", fontSize: 12, fontWeight: 700 },
+  sessionDate: { color: "#1B1B1B", fontSize: 16, fontWeight: 700 },
+  sessionSpecialist: { color: "#6F6258", fontSize: 13, marginTop: 4 },
+  sessionZoneBadge: { background: "#EAF3EE", color: "#1E5A49", borderRadius: 999, padding: "6px 10px", fontSize: 12, fontWeight: 700 },
+  sessionPackage: { color: "#12382F", fontSize: 13, fontWeight: 700, marginTop: 12 },
   sessionNotes: { color: "#4A403B", fontSize: 14, lineHeight: 1.6, marginTop: 12 },
   billingList: { display: "flex", flexDirection: "column", gap: 12 },
-  billingCard: { background: "#FCFAF7", border: "1px solid #F0E6DD", borderRadius: 18, padding: 18 },
+  billingCard: { background: "#FFFDF8", border: "1px solid #E7DCCB", borderRadius: 18, padding: 18 },
   billingTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" },
-  billingNumber: { color: "#241F1D", fontSize: 16, fontWeight: 700 },
-  billingMeta: { color: "#8B7E74", fontSize: 13, marginTop: 4 },
-  billingTotal: { color: "#A15A58", fontSize: 22, fontWeight: 700 },
+  billingNumber: { color: "#1B1B1B", fontSize: 16, fontWeight: 700 },
+  billingMeta: { color: "#6F6258", fontSize: 13, marginTop: 4 },
+  billingTotal: { color: "#12382F", fontSize: 22, fontWeight: 700 },
   billingStatusRow: { display: "flex", justifyContent: "space-between", gap: 12, marginTop: 12, flexWrap: "wrap" },
-  billingMethod: { color: "#6E625B", fontSize: 13 },
-  billingStatus: { color: "#28704B", fontSize: 13, fontWeight: 700, textTransform: "capitalize" },
-  downloadButton: { background: "linear-gradient(135deg, #C38A63, #A85A66)", color: "#fff", border: "none", borderRadius: 16, padding: "14px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer" },
+  billingMethod: { color: "#6F6258", fontSize: 13 },
+  billingStatus: { color: "#1E5A49", fontSize: 13, fontWeight: 700, textTransform: "capitalize" },
 };
+

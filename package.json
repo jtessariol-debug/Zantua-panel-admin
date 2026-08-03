@@ -14,12 +14,16 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.0",
-    "react-scripts": "5.0.1"
+    "react-scripts": "5.0.1",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "seed:users": "node scripts/seed-users.js"
+    "seed:users": "node scripts/seed-users.js",
+    "import:goldie": "node scripts/importGoldieAppointments.js",
+    "goldie:dry-run": "node scripts/importGoldieAppointments.js",
+    "goldie:import": "set \"DRY_RUN=false\" && node scripts/importGoldieAppointments.js"
   },
   "browserslist": {
     "production": [

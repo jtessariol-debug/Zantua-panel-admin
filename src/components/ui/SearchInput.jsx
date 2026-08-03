@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+import { BRANDING } from "../../lib/branding";
 
 export default function SearchInput({ value, onChange, placeholder }) {
   return (
@@ -20,17 +21,19 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    border: "1px solid #E7DACE",
-    background: "#FCFAF7",
-    borderRadius: 16,
-    padding: "12px 14px",
+    minWidth: 280,
+    border: `1px solid ${BRANDING.colors.border}`,
+    background: "#FFFDF8",
+    borderRadius: 18,
+    padding: "13px 14px",
+    boxShadow: "0 10px 22px rgba(18, 56, 47, 0.035)",
   },
   input: {
     border: "none",
     background: "transparent",
     width: "100%",
     fontSize: 14,
-    color: "#2A2522",
+    color: BRANDING.colors.text,
     outline: "none",
   },
 };
