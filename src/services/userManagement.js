@@ -1,4 +1,13 @@
-﻿import { supabase } from "../lib/supabaseClient";
+import { supabase } from "../lib/supabaseClient";
+
+function logUserManagementError(context, error) {
+  console.error(context, {
+    code: error?.code,
+    message: error?.message,
+    details: error?.details,
+    hint: error?.hint,
+  });
+}
 
 function normalizeProfile(profile) {
   return {
@@ -10,7 +19,7 @@ function normalizeProfile(profile) {
 }
 
 export async function fetchUserProfiles() {
-  const [profilesResponse, specialistsResponse] = await Promise.all([
+  const [profilesResponse, specialistsResponse, employeesResponse] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, full_name, role, active, specialist_id, created_at, updated_at, specialists(full_name)")
@@ -19,22 +28,82 @@ export async function fetchUserProfiles() {
       .from("specialists")
       .select("id, full_name, active")
       .order("full_name", { ascending: true }),
+    supabase
+      .from("employees")
+      .select("id, full_name, position, specialist_id, status")
+      .order("full_name", { ascending: true }),
   ]);
 
   if (profilesResponse.error) {
-    console.error("Error loading profiles", profilesResponse.error);
+    logUserManagementError("Error loading profiles", profilesResponse.error);
     throw new Error("No fue posible cargar los usuarios del panel.");
   }
 
   if (specialistsResponse.error) {
-    console.error("Error loading specialists for profiles", specialistsResponse.error);
+    logUserManagementError("Error loading specialists for profiles", specialistsResponse.error);
     throw new Error("No fue posible cargar las especialistas vinculables.");
   }
 
+  if (employeesResponse.error) {
+    logUserManagementError("Error loading employees for profiles", employeesResponse.error);
+    throw new Error("No fue posible cargar los cargos vinculados.");
+  }
+
+  const employees = employeesResponse.data || [];
+  const employeesBySpecialistId = new Map(
+    employees.filter((employee) => employee.specialist_id).map((employee) => [employee.specialist_id, employee])
+  );
+  const employeesByName = new Map(
+    employees.map((employee) => [String(employee.full_name || "").trim().toUpperCase(), employee])
+  );
+
   return {
-    profiles: (profilesResponse.data || []).map((profile) => normalizeProfile(profile)),
+    profiles: (profilesResponse.data || []).map((profile) => {
+      const employee = profile.specialist_id
+        ? employeesBySpecialistId.get(profile.specialist_id) || null
+        : employeesByName.get(String(profile.full_name || "").trim().toUpperCase()) || null;
+
+      return normalizeProfile({
+        ...profile,
+        position: employee?.position || "",
+        employee_id: employee?.id || null,
+        employee_status: employee?.status || null,
+      });
+    }),
     specialists: (specialistsResponse.data || []).filter((specialist) => specialist.active !== false),
   };
+}
+
+async function syncEmployeePosition({ specialist_id, position }) {
+  if (!specialist_id || !position?.trim()) {
+    return;
+  }
+
+  const { data: employee, error: employeeLookupError } = await supabase
+    .from("employees")
+    .select("id, position")
+    .eq("specialist_id", specialist_id)
+    .maybeSingle();
+
+  if (employeeLookupError) {
+    logUserManagementError("Error loading employee for position sync", employeeLookupError);
+    return;
+  }
+
+  if (!employee?.id) {
+    return;
+  }
+
+  const { error: employeeUpdateError } = await supabase
+    .from("employees")
+    .update({
+      position: position.trim(),
+    })
+    .eq("id", employee.id);
+
+  if (employeeUpdateError) {
+    logUserManagementError("Error updating employee position from user module", employeeUpdateError);
+  }
 }
 
 export async function updateUserProfile(userId, payload, currentProfile = null) {
@@ -55,9 +124,11 @@ export async function updateUserProfile(userId, payload, currentProfile = null) 
     .single();
 
   if (error) {
-    console.error("Error updating profile", error);
+    logUserManagementError("Error updating profile", error);
     throw new Error("No fue posible actualizar el perfil del usuario.");
   }
+
+  await syncEmployeePosition(payload);
 
   return data;
 }
@@ -73,20 +144,24 @@ export async function createUserAccount(payload, currentProfile) {
       email: payload.email,
       password: payload.password,
       role: payload.role,
+      position: payload.position || null,
       specialist_id: payload.specialist_id || null,
       active: payload.active !== false,
     },
   });
 
   if (error) {
-    console.error("Error invoking create-user function", error);
+    logUserManagementError("Error invoking create-user function", error);
+
     if (
-      error.message?.includes("404")
+      error.name === "FunctionsFetchError"
+      || error.message?.includes("404")
       || error.message?.includes("FunctionsHttpError")
       || error.message?.includes("Failed to send a request")
     ) {
-      throw new Error("La creación automática de usuarios requiere que la Edge Function `create-user` esté desplegada y activa.");
+      throw new Error("La creación automática de usuarios requiere que la Edge Function `create-user` esté desplegada, accesible y activa.");
     }
+
     throw new Error(error.message || "No fue posible crear el usuario.");
   }
 
@@ -94,6 +169,7 @@ export async function createUserAccount(payload, currentProfile) {
     throw new Error(data.error);
   }
 
+  await syncEmployeePosition(payload);
+
   return data?.user || null;
 }
-

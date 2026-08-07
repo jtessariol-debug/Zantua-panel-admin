@@ -16,6 +16,7 @@ type CreateUserPayload = {
   password?: string;
   role?: UserRole;
   specialist_id?: string | null;
+  position?: string | null;
   active?: boolean;
 };
 
@@ -104,6 +105,7 @@ Deno.serve(async (request) => {
   const password = String(payload.password || "");
   const role = payload.role;
   const specialistId = payload.specialist_id ? String(payload.specialist_id) : null;
+  const position = payload.position ? String(payload.position).trim() : null;
   const active = payload.active !== false;
 
   if (!fullName) {
@@ -140,6 +142,24 @@ Deno.serve(async (request) => {
 
     if (!specialist || specialist.active === false) {
       return jsonResponse({ error: "La especialista vinculada no esta disponible." }, 400);
+    }
+  }
+
+  if (specialistId) {
+    const { data: existingSpecialistProfile, error: existingSpecialistProfileError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name")
+      .eq("specialist_id", specialistId)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingSpecialistProfileError) {
+      console.error("create-user existing specialist profile lookup error", existingSpecialistProfileError);
+      return jsonResponse({ error: "No fue posible validar si la especialista ya tiene usuario." }, 500);
+    }
+
+    if (existingSpecialistProfile) {
+      return jsonResponse({ error: "La especialista seleccionada ya tiene un usuario vinculado." }, 409);
     }
   }
 
@@ -191,6 +211,27 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "No fue posible crear el perfil del usuario." }, 500);
   }
 
+  if (specialistId && position) {
+    const { data: employee, error: employeeLookupError } = await supabaseAdmin
+      .from("employees")
+      .select("id")
+      .eq("specialist_id", specialistId)
+      .maybeSingle();
+
+    if (employeeLookupError) {
+      console.error("create-user employee lookup error", employeeLookupError);
+    } else if (employee?.id) {
+      const { error: employeeUpdateError } = await supabaseAdmin
+        .from("employees")
+        .update({ position })
+        .eq("id", employee.id);
+
+      if (employeeUpdateError) {
+        console.error("create-user employee position sync error", employeeUpdateError);
+      }
+    }
+  }
+
   if (!active) {
     const { error: updateBanError } = await supabaseAdmin.auth.admin.updateUserById(newUserId, {
       ban_duration: "876000h",
@@ -209,6 +250,7 @@ Deno.serve(async (request) => {
       email,
       role,
       active,
+      position,
       specialist_id: role === "recepcion" ? null : specialistId,
     },
   });

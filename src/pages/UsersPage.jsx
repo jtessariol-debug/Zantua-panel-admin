@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import AppLayout from "../components/layout/AppLayout";
 import PatientModal from "../components/patients/PatientModal";
 import CreateUserModal from "../components/users/CreateUserModal";
 import ActionButton from "../components/ui/ActionButton";
@@ -28,18 +29,25 @@ export default function UsersPage() {
 
   async function loadUsers() {
     setLoading(true);
-    setFeedback({ type: "", message: "" });
+    setFeedback((current) => (current.type === "error" ? current : { type: "", message: "" }));
 
     try {
       const result = await fetchUserProfiles();
-      setProfiles(result.profiles);
-      setSpecialists(result.specialists);
+      setProfiles(result?.profiles || []);
+      setSpecialists(result?.specialists || []);
     } catch (error) {
-      console.error(error);
+      console.error("Users page load error", {
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+      });
       setFeedback({
         type: "error",
         message: error.message || "No fue posible cargar los usuarios del panel.",
       });
+      setProfiles([]);
+      setSpecialists([]);
     } finally {
       setLoading(false);
     }
@@ -55,7 +63,12 @@ export default function UsersPage() {
       setFeedback({ type: "success", message: "Perfil actualizado correctamente." });
       await loadUsers();
     } catch (error) {
-      console.error(error);
+      console.error("Users page save error", {
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+      });
       setFeedback({ type: "error", message: error.message || "No fue posible actualizar el perfil." });
     } finally {
       setSaving(false);
@@ -72,7 +85,12 @@ export default function UsersPage() {
       setFeedback({ type: "success", message: "Usuario creado correctamente." });
       await loadUsers();
     } catch (error) {
-      console.error(error);
+      console.error("Users page create error", {
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+      });
       setFeedback({ type: "error", message: error.message || "No fue posible crear el usuario." });
     } finally {
       setSaving(false);
@@ -127,6 +145,11 @@ export default function UsersPage() {
       key: "role",
       label: "Rol",
       render: (profile) => <span style={styles.roleBadge}>{getRoleLabel(profile.role)}</span>,
+    },
+    {
+      key: "position",
+      label: "Cargo",
+      render: (profile) => profile.position || "Sin cargo",
     },
     {
       key: "specialist",
@@ -199,6 +222,12 @@ export default function UsersPage() {
         >
           {loading ? (
             <div style={styles.loadingCopy}>Cargando usuarios...</div>
+          ) : feedback.type === "error" && !profiles.length ? (
+            <EmptyState
+              title="No se pudo cargar Usuarios."
+              description={feedback.message || "Ocurrió un error al consultar los perfiles del panel."}
+              action={<ActionButton onClick={loadUsers}>Reintentar</ActionButton>}
+            />
           ) : (
             <DataTable
               columns={columns}
@@ -255,7 +284,7 @@ export default function UsersPage() {
       {modalState?.mode === "edit" ? (
         <PatientModal
           title="Editar usuario"
-          subtitle="Actualiza nombre, rol, estado y especialista vinculada."
+          subtitle="Actualiza nombre, rol, estado, cargo visible y especialista vinculada."
           onClose={() => setModalState(null)}
         >
           <UserProfileForm
@@ -278,6 +307,7 @@ export default function UsersPage() {
           <div style={styles.detailWrap}>
             <DetailRow label="Nombre" value={modalState.profile?.full_name} />
             <DetailRow label="Rol" value={getRoleLabel(modalState.profile?.role)} />
+            <DetailRow label="Cargo" value={modalState.profile?.position || "Sin cargo"} />
             <DetailRow label="Estado" value={modalState.profile?.active === false ? "Inactivo" : "Activo"} />
             <DetailRow label="Especialista vinculada" value={modalState.profile?.specialistLabel} />
             <DetailRow label="UID" value={modalState.profile?.id} />
@@ -310,6 +340,7 @@ function UserProfileForm({ initialValues, specialists, submitLabel, onSubmit, on
     role: initialValues?.role || USER_ROLES.SPECIALIST,
     active: initialValues?.active !== false,
     specialist_id: initialValues?.specialist_id || "",
+    position: initialValues?.position || "",
   });
   const [error, setError] = useState("");
 
@@ -331,6 +362,7 @@ function UserProfileForm({ initialValues, specialists, submitLabel, onSubmit, on
       full_name: form.full_name.trim(),
       role: form.role,
       active: form.active,
+      position: form.position.trim(),
       specialist_id: form.role === USER_ROLES.SPECIALIST || form.role === USER_ROLES.ADMIN
         ? form.specialist_id || null
         : null,
@@ -369,6 +401,16 @@ function UserProfileForm({ initialValues, specialists, submitLabel, onSubmit, on
               <option value={USER_ROLES.RECEPTION}>Recepción</option>
               <option value={USER_ROLES.SPECIALIST}>Especialista</option>
             </select>
+          </div>
+
+          <div>
+            <label style={styles.label}>Cargo visible</label>
+            <input
+              type="text"
+              value={form.position}
+              onChange={(event) => setForm((current) => ({ ...current, position: event.target.value }))}
+              style={styles.input}
+            />
           </div>
 
           <div>

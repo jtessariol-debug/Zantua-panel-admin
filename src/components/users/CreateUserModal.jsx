@@ -14,6 +14,7 @@ export default function CreateUserModal({ specialists, onSubmit, onCancel, loadi
     password: "",
     role: USER_ROLES.SPECIALIST,
     specialist_id: "",
+    position: "",
     active: true,
   });
   const [error, setError] = useState("");
@@ -47,6 +48,7 @@ export default function CreateUserModal({ specialists, onSubmit, onCancel, loadi
       email: form.email.trim().toLowerCase(),
       password: form.password,
       role: form.role,
+      position: form.position.trim(),
       specialist_id: form.role === USER_ROLES.RECEPTION ? null : form.specialist_id || null,
       active: form.active,
     });
@@ -112,6 +114,16 @@ export default function CreateUserModal({ specialists, onSubmit, onCancel, loadi
             </select>
           </div>
           <div>
+            <label style={styles.label}>Cargo visible</label>
+            <input
+              type="text"
+              value={form.position}
+              onChange={(event) => setForm((current) => ({ ...current, position: event.target.value }))}
+              style={styles.input}
+              placeholder="Ej. Cosmetóloga"
+            />
+          </div>
+          <div>
             <label style={styles.label}>Estado</label>
             <select
               value={form.active ? "true" : "false"}
@@ -147,6 +159,10 @@ export default function CreateUserModal({ specialists, onSubmit, onCancel, loadi
 
       {error ? <div style={styles.errorBanner}>{error}</div> : null}
 
+      <div style={styles.helperCopy}>
+        Roles válidos actualmente: admin, recepción y especialista. La función segura de creación no acepta otros valores todavía.
+      </div>
+
       <div style={styles.actions}>
         <ActionButton type="button" variant="secondary" onClick={onCancel}>
           Cancelar
@@ -169,4 +185,5 @@ const styles = {
   actions: { display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" },
   infoBanner: { background: "#EEF5F1", border: "1px solid #D8E7DF", color: "#12382F", borderRadius: 18, padding: "14px 16px", fontSize: 14, lineHeight: 1.6 },
   errorBanner: { background: "rgba(209, 109, 120, 0.1)", border: "1px solid rgba(209, 109, 120, 0.28)", color: "#A44E60", borderRadius: 16, padding: "14px 16px", fontSize: 14, fontWeight: 600 },
+  helperCopy: { color: "#6F6258", fontSize: 13, lineHeight: 1.6 },
 };
