@@ -13,6 +13,7 @@ import PatientsPage from "./pages/PatientsPage";
 import PayrollPage from "./pages/PayrollPage";
 import SettingsPage from "./pages/SettingsPage";
 import UsersPage from "./pages/UsersPage";
+import PublicBookingPage from "./pages/PublicBookingPage";
 import ReactivationPage from "./pages/ReactivationPage";
 import FollowupsPage from "./pages/FollowupsPage";
 
@@ -84,6 +85,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reservar/:slug" element={<PublicBookingPage />} />
           <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/agenda" element={<PrivateRoute><AgendaPage /></PrivateRoute>} />
