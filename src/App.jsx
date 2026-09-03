@@ -13,6 +13,8 @@ import PatientsPage from "./pages/PatientsPage";
 import PayrollPage from "./pages/PayrollPage";
 import SettingsPage from "./pages/SettingsPage";
 import UsersPage from "./pages/UsersPage";
+import ReactivationPage from "./pages/ReactivationPage";
+import FollowupsPage from "./pages/FollowupsPage";
 
 function PrivateRoute({ children }) {
   const { user, profile, loading, authError } = useAuth();
@@ -86,6 +88,8 @@ export default function App() {
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/agenda" element={<PrivateRoute><AgendaPage /></PrivateRoute>} />
           <Route path="/patients" element={<PrivateRoute><PatientsPage /></PrivateRoute>} />
+          <Route path="/patients/reactivation" element={<PrivateRoute><RoleRoute allowedRoles={[USER_ROLES.ADMIN, USER_ROLES.OWNER, USER_ROLES.RECEPTION]}><ReactivationPage /></RoleRoute></PrivateRoute>} />
+          <Route path="/patients/followups" element={<PrivateRoute><RoleRoute allowedRoles={[USER_ROLES.ADMIN, USER_ROLES.OWNER, USER_ROLES.RECEPTION, USER_ROLES.SPECIALIST]}><FollowupsPage /></RoleRoute></PrivateRoute>} />
           <Route path="/laser" element={<PrivateRoute><LaserPage /></PrivateRoute>} />
           <Route path="/billing" element={<PrivateRoute><RoleRoute allowedRoles={[USER_ROLES.ADMIN, USER_ROLES.OWNER, USER_ROLES.RECEPTION, USER_ROLES.SPECIALIST]}><BillingPage /></RoleRoute></PrivateRoute>} />
           <Route path="/commissions" element={<PrivateRoute><RoleRoute allowedRoles={[USER_ROLES.ADMIN, USER_ROLES.OWNER]}><CommissionsPage /></RoleRoute></PrivateRoute>} />

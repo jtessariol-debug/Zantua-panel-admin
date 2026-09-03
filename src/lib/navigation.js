@@ -7,6 +7,7 @@ import {
   Settings,
   ShieldUser,
   Sparkles,
+  UserRoundSearch,
   Users,
   WalletCards,
 } from "lucide-react";
@@ -24,6 +25,7 @@ export const NAVIGATION_SECTIONS = [
     items: [
       { label: "Agenda", path: "/agenda", icon: CalendarDays },
       { label: "Pacientes", path: "/patients", icon: Users },
+      { label: "Reactivación", path: "/patients/reactivation", icon: UserRoundSearch },
       { label: "Láser", path: "/laser", icon: Sparkles },
     ],
   },
@@ -54,7 +56,7 @@ export function getNavigationSections(role) {
     return NAVIGATION_SECTIONS
       .map((section) => ({
         ...section,
-        items: section.items.filter((item) => ["/dashboard", "/agenda", "/patients", "/billing"].includes(item.path)),
+        items: section.items.filter((item) => ["/dashboard", "/agenda", "/patients", "/patients/reactivation", "/billing"].includes(item.path)),
       }))
       .filter((section) => section.items.length > 0);
   }

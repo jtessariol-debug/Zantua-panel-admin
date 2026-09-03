@@ -20,6 +20,7 @@ import {
   getTodayAppointments,
 } from "../services/clinicData";
 import { fetchFinanceDashboardMetrics, fetchInvoices } from "../services/finance";
+import { fetchPatientGrowthOpportunities } from "../services/patientGrowth";
 
 function formatCurrency(value) {
   return `RD$${Number(value || 0).toLocaleString("en-US", {
@@ -139,6 +140,7 @@ export default function Dashboard() {
     comisionesPendientes: 0,
     inventarioBajo: 0,
   });
+  const [growthOpportunities, setGrowthOpportunities] = useState({});
 
   useEffect(() => {
     function handleResize() {
@@ -184,6 +186,14 @@ export default function Dashboard() {
       mounted = false;
     };
   }, [isSpecialist, profile?.specialist_id, user?.uid]);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchPatientGrowthOpportunities()
+      .then((data) => { if (mounted) setGrowthOpportunities(data || {}); })
+      .catch((error) => console.error("No fue posible cargar oportunidades de pacientes", error));
+    return () => { mounted = false; };
+  }, [user?.uid]);
 
   const todayAppointments = useMemo(() => getTodayAppointments(appointments), [appointments]);
   const statusSummary = useMemo(() => getAppointmentStatusSummary(todayAppointments), [todayAppointments]);
@@ -263,6 +273,23 @@ export default function Dashboard() {
               onNewAppointment={() => navigate("/agenda")}
               onNewPatient={() => navigate("/patients")}
             />
+          </div>
+
+          <div style={layout.span12}>
+            <SectionCard
+              title="Oportunidades de seguimiento"
+              subtitle="Pacientes y tareas identificados por la información disponible en el sistema."
+              action={<button type="button" style={styles.linkButton} onClick={() => navigate("/patients/reactivation")}>Ver reactivación</button>}
+            >
+              <div style={styles.opportunityGrid}>
+                <button type="button" style={styles.opportunityCard} onClick={() => navigate("/patients/reactivation")}>
+                  <strong>{growthOpportunities.inactive_90_plus ?? 0}</strong><span>Pacientes con 90+ días sin visita</span>
+                </button>
+                <button type="button" style={styles.opportunityCard} onClick={() => navigate("/patients/followups")}>
+                  <strong>{growthOpportunities.followups_due ?? 0}</strong><span>Seguimientos pendientes</span>
+                </button>
+              </div>
+            </SectionCard>
           </div>
 
           {compactMetrics.map((metric) => (
@@ -379,6 +406,9 @@ const styles = {
     maxWidth: 1440,
     margin: "0 auto",
   },
+  opportunityGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 },
+  opportunityCard: { textAlign: "left", border: "1px solid #E7DCCB", borderRadius: 12, background: "#FFFDF8", padding: 16, display: "grid", gap: 5, cursor: "pointer", color: "#12382F" },
+  linkButton: { border: 0, background: "transparent", color: "#12382F", fontWeight: 700, cursor: "pointer" },
   dashboardGrid: {
     display: "grid",
     gap: 18,

@@ -7,6 +7,8 @@ import {
   NotebookTabs,
   ReceiptText,
   Waves,
+  Camera,
+  ListChecks,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import ClinicalHistoryForm from "../components/clinical/ClinicalHistoryForm";
@@ -17,6 +19,7 @@ import InformedConsentView from "../components/clinical/InformedConsentView";
 import AppLayout from "../components/layout/AppLayout";
 import LaserSessionDetail from "../components/laser/LaserSessionDetail";
 import ClientPackagesCard from "../components/patients/ClientPackagesCard";
+import { EvolutionPhotosPanel, PatientFollowupsPanel, PatientRelationshipOverview } from "../components/patients/PatientGrowthPanels";
 import PatientModal from "../components/patients/PatientModal";
 import EmptyState from "../components/ui/EmptyState";
 import SectionCard from "../components/ui/SectionCard";
@@ -32,7 +35,9 @@ import { fetchClientPackagesByClient } from "../services/clientPackages";
 import { fetchInvoicesByClient } from "../services/finance";
 import { fetchLaserSessionsByClient } from "../services/laser";
 import { fetchPatientById } from "../services/patients";
+import { fetchPatientEvolutionPhotos, fetchPatientFollowups } from "../services/patientGrowth";
 import { exportConsentPDF } from "../utils/exportPDF";
+import { useAuth } from "../hooks/useAuth";
 
 const TABS = [
   { key: "overview", label: "Información general", icon: NotebookTabs },
@@ -41,9 +46,12 @@ const TABS = [
   { key: "consent", label: "Consentimiento informado", icon: FileSignature },
   { key: "laser", label: "Sesiones láser", icon: Waves },
   { key: "billing", label: "Facturación", icon: ReceiptText },
+  { key: "followups", label: "Seguimientos", icon: ListChecks },
+  { key: "evolution", label: "Evolución", icon: Camera },
 ];
 
 export default function ClientProfile() {
+  const { profile } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -54,6 +62,8 @@ export default function ClientProfile() {
   const [laserSessions, setLaserSessions] = useState([]);
   const [clientPackages, setClientPackages] = useState([]);
   const [billingItems, setBillingItems] = useState([]);
+  const [followups, setFollowups] = useState([]);
+  const [evolutionPhotos, setEvolutionPhotos] = useState([]);
   const [consentLookups, setConsentLookups] = useState({ specialists: [], services: [] });
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
@@ -65,6 +75,8 @@ export default function ClientProfile() {
     clinical: "",
     laser: "",
     billing: "",
+    followups: "",
+    evolution: "",
   });
   const [clinicalModalOpen, setClinicalModalOpen] = useState(false);
   const [consentModalOpen, setConsentModalOpen] = useState(false);
@@ -79,6 +91,8 @@ export default function ClientProfile() {
       clinical: "",
       laser: "",
       billing: "",
+      followups: "",
+      evolution: "",
     });
 
     try {
@@ -99,6 +113,8 @@ export default function ClientProfile() {
       fetchConsentLookups(),
       fetchInvoicesByClient(id),
       fetchClientPackagesByClient(id, { activeOnly: true }),
+      fetchPatientFollowups(id),
+      fetchPatientEvolutionPhotos(id),
     ]);
 
     const [
@@ -109,6 +125,8 @@ export default function ClientProfile() {
       consentLookupResult,
       invoicesResult,
       packagesResult,
+      followupsResult,
+      evolutionResult,
     ] = results;
 
     if (appointmentsResult.status === "fulfilled") {
@@ -176,6 +194,22 @@ export default function ClientProfile() {
       console.error(packagesResult.reason);
     }
 
+    if (followupsResult.status === "fulfilled") {
+      setFollowups(followupsResult.value);
+    } else {
+      setFollowups([]);
+      setSectionErrors((current) => ({ ...current, followups: "No se pudieron cargar los seguimientos." }));
+      console.error(followupsResult.reason);
+    }
+
+    if (evolutionResult.status === "fulfilled") {
+      setEvolutionPhotos(evolutionResult.value);
+    } else {
+      setEvolutionPhotos([]);
+      setSectionErrors((current) => ({ ...current, evolution: "No se pudieron cargar las fotografías de evolución." }));
+      console.error(evolutionResult.reason);
+    }
+
     setLoading(false);
   }
 
@@ -184,6 +218,12 @@ export default function ClientProfile() {
   }, [id]);
 
   const latestConsent = consents[0] || null;
+
+  async function refreshPatientGrowth() {
+    const results = await Promise.allSettled([fetchPatientFollowups(id), fetchPatientEvolutionPhotos(id)]);
+    if (results[0].status === "fulfilled") setFollowups(results[0].value);
+    if (results[1].status === "fulfilled") setEvolutionPhotos(results[1].value);
+  }
 
   const patientStats = useMemo(
     () => [
@@ -345,6 +385,7 @@ export default function ClientProfile() {
             </div>
 
             <ClientPackagesCard packages={clientPackages} />
+            <PatientRelationshipOverview patient={patient} appointments={appointments} packages={clientPackages} laserSessions={laserSessions} />
           </div>
         ) : null}
 
@@ -497,6 +538,20 @@ export default function ClientProfile() {
               </div>
             ) : null}
           </SectionCard>
+        ) : null}
+
+        {activeTab === "followups" ? (
+          <>
+            {sectionErrors.followups ? <div style={styles.inlineError}>{sectionErrors.followups}</div> : null}
+            <PatientFollowupsPanel patient={patient} appointments={appointments} laserSessions={laserSessions} followups={followups} profile={profile} onChanged={refreshPatientGrowth} />
+          </>
+        ) : null}
+
+        {activeTab === "evolution" ? (
+          <>
+            {sectionErrors.evolution ? <div style={styles.inlineError}>{sectionErrors.evolution}</div> : null}
+            <EvolutionPhotosPanel patient={patient} appointments={appointments} laserSessions={laserSessions} photos={evolutionPhotos} profile={profile} onChanged={refreshPatientGrowth} />
+          </>
         ) : null}
       </div>
 
